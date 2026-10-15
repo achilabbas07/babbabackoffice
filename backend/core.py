@@ -80,6 +80,7 @@ class Product(BaseDocument):
     name: str
     category: str
     price: float
+    price_ojol: float = 0
     type: str = "both"
     image: str = ""
     inventoryId: Optional[str] = None

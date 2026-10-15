@@ -98,13 +98,19 @@ export default function POS() {
     loadRefs();
   });
 
-  const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const ojol = order.type === "Ojek Online";
+  const priceOf = (item) => {
+    const p = products.find((x) => x.id === item.productId);
+    if (!p) return item.price;
+    return ojol && p.price_ojol > 0 ? p.price_ojol : p.price;
+  };
+  const total = cart.reduce((s, i) => s + priceOf(i) * i.qty, 0);
 
   return (
     <div className="grid gap-4 md:grid-cols-[1fr_300px] lg:grid-cols-[1fr_340px] xl:grid-cols-[1fr_380px]">
-      <ProductGrid products={products} onAdd={add} />
+      <ProductGrid products={products} onAdd={add} ojol={ojol} />
       <CartPanel
-        order={order} setOrder={setOrder} tables={tables} customers={customers} cart={cart} setCart={setCart}
+        order={order} setOrder={setOrder} tables={tables} customers={customers} cart={cart} setCart={setCart} priceOf={priceOf} total={total}
         canPay={user.role !== "waiter"} busy={busy} onSaveBill={saveBill} onPay={() => setPayOpen(true)} onReset={reset}
       />
       <PayDialog open={payOpen} onOpenChange={setPayOpen} total={total} onPay={pay} busy={busy} />

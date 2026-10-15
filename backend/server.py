@@ -35,10 +35,15 @@ class UserIn(BaseModel):
     pin: Optional[str] = Field(None, pattern=r"^\d{4,6}$")
 
 
+ORDER_TYPES = Literal["Dine In", "Takeaway", "Walk In", "Ojek Online"]
+DIRECT_PAY_TYPES = ("Walk In", "Ojek Online")
+
+
 class ProductIn(BaseModel):
     name: str = Field(min_length=1)
     category: str = Field(min_length=1)
     price: float = Field(ge=0)
+    price_ojol: float = Field(0, ge=0)
     type: Literal["dine_in", "takeaway", "both"] = "both"
     image: str = ""
     inventoryId: Optional[str] = None
@@ -81,7 +86,7 @@ class OrderItemIn(BaseModel):
 
 
 class OpenBillIn(BaseModel):
-    type: Literal["Dine In", "Takeaway"]
+    type: ORDER_TYPES
     tableId: Optional[str] = None
     customerId: Optional[str] = None
     customerName: str = ""
@@ -122,7 +127,11 @@ async def get_or_404(coll: str, doc_id: str, label: str) -> dict:
     return doc
 
 
-async def build_items(items: List[OrderItemIn]):
+def unit_price(p: Product, order_type: str) -> float:
+    return p.price_ojol if order_type == "Ojek Online" and p.price_ojol > 0 else p.price
+
+
+async def build_items(items: List[OrderItemIn], order_type: str):
     ids = list({i.productId for i in items})
     prods = {d["_id"]: Product.from_mongo(d) async for d in db.products.find({"_id": {"$in": ids}})}
     out = []
@@ -130,8 +139,9 @@ async def build_items(items: List[OrderItemIn]):
         p = prods.get(i.productId)
         if not p:
             raise HTTPException(404, f"Produk {i.productId} tidak ditemukan")
-        out.append({"productId": p.id, "productName": p.name, "qty": i.qty, "price": p.price, "hpp": p.hpp,
-                    "notes": i.notes, "subtotal": p.price * i.qty})
+        price = unit_price(p, order_type)
+        out.append({"productId": p.id, "productName": p.name, "qty": i.qty, "price": price, "hpp": p.hpp,
+                    "notes": i.notes, "subtotal": price * i.qty})
     return out, sum(x["subtotal"] for x in out)
 
 
@@ -430,7 +440,9 @@ async def delete_customer(cid: str, _: User = Depends(ADMIN)):
 
 # ---------- Open Bills ----------
 async def compose_bill(body: OpenBillIn, user: User, bill_id: str, timestamp: str) -> OpenBill:
-    items, total = await build_items(body.items)
+    if body.type in DIRECT_PAY_TYPES:
+        raise HTTPException(400, f"Pesanan {body.type} harus langsung dibayar, tidak bisa disimpan sebagai open bill")
+    items, total = await build_items(body.items, body.type)
     cust = await get_or_404("customers", body.customerId, "Pelanggan") if body.customerId else None
     return OpenBill(
         id=bill_id, timestamp=timestamp, type=body.type, total=total, items_json=items,
@@ -511,7 +523,7 @@ async def create_transaction(body: TransactionIn, user: User = Depends(STAFF)):
     if table and table["status"] == "occupied" and (table.get("orderData") or {}).get("openBillId") != (bill.id if bill else None):
         raise HTTPException(409, f"{table['name']} sedang terisi oleh open bill lain")
     customer = await get_or_404("customers", customer_id, "Pelanggan") if customer_id else None
-    items, total = await build_items(body.items)
+    items, total = await build_items(body.items, body.type)
     if body.method == "Cash" and body.cashGiven < total:
         raise HTTPException(400, "Uang tunai kurang dari total")
     cash = body.cashGiven if body.method == "Cash" else total

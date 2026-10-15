@@ -37,6 +37,7 @@ export default function Products() {
     { name: "name", label: "Nama produk", required: true },
     { name: "category", label: "Kategori", required: true, placeholder: "Minuman / Makanan / Snack" },
     { name: "price", label: "Harga jual (Rp)", type: "number", required: true },
+    { name: "price_ojol", label: "Harga Ojol (Rp)", type: "number", hint: "Harga khusus order Ojek Online. Isi 0 untuk memakai harga jual normal." },
     { name: "type", label: "Tipe penjualan", type: "select", options: Object.entries(PRODUCT_TYPE_LABEL).map(([value, label]) => ({ value, label })) },
     { name: "image", label: "URL gambar", placeholder: "https://..." },
     { name: "inventoryId", label: "Barang jadi (stok langsung)", type: "select", allowNone: true, options: inventory.map((i) => ({ value: i.id, label: `${i.name} (${i.unit})` })), hint: "Opsional. Dipakai bila produk tidak punya resep — stok berkurang 1 per porsi." },
@@ -44,7 +45,7 @@ export default function Products() {
   ], [inventory]);
 
   const save = async (f) => {
-    const body = { name: f.name, category: f.category, price: Number(f.price) || 0, type: f.type || "both", image: f.image || "", inventoryId: f.inventoryId || null, hpp: Number(f.hpp) || 0 };
+    const body = { name: f.name, category: f.category, price: Number(f.price) || 0, price_ojol: Number(f.price_ojol) || 0, type: f.type || "both", image: f.image || "", inventoryId: f.inventoryId || null, hpp: Number(f.hpp) || 0 };
     if (dialog.id) await api.put(`/products/${dialog.id}`, body);
     else await api.post("/products", body);
     toast.success("Produk tersimpan");
@@ -54,12 +55,12 @@ export default function Products() {
   return (
     <div>
       <PageHeader title="Produk & Resep" subtitle="HPP dihitung otomatis dari resep (qty bahan × biaya per unit).">
-        <Button data-testid="add-product-button" onClick={() => setDialog({ type: "both", hpp: 0 })}><Plus className="mr-1 h-4 w-4" />Tambah Produk</Button>
+        <Button data-testid="add-product-button" onClick={() => setDialog({ type: "both", hpp: 0, price_ojol: 0 })}><Plus className="mr-1 h-4 w-4" />Tambah Produk</Button>
       </PageHeader>
       <div className="overflow-x-auto rounded-2xl border border-border bg-card">
         <Table>
           <TableHeader>
-            <TableRow><TableHead>Produk</TableHead><TableHead>Kategori</TableHead><TableHead>Sumber stok</TableHead><TableHead className="text-right">Harga</TableHead><TableHead className="text-right">HPP</TableHead><TableHead className="text-right">Margin</TableHead><TableHead /></TableRow>
+            <TableRow><TableHead>Produk</TableHead><TableHead>Kategori</TableHead><TableHead>Sumber stok</TableHead><TableHead className="text-right">Harga</TableHead><TableHead className="text-right">Harga Ojol</TableHead><TableHead className="text-right">HPP</TableHead><TableHead className="text-right">Margin</TableHead><TableHead /></TableRow>
           </TableHeader>
           <TableBody>
             {products.map((p) => {
@@ -78,6 +79,7 @@ export default function Products() {
                   <TableCell>{p.category}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{rc ? `Resep (${rc} bahan)` : p.inventoryId ? `Barang jadi: ${invName(p.inventoryId) || p.inventoryId}` : "Manual"}</TableCell>
                   <TableCell className="text-right font-mono">{rp(p.price)}</TableCell>
+                  <TableCell data-testid={`product-price-ojol-${p.id}`} className="text-right font-mono">{p.price_ojol > 0 ? rp(p.price_ojol) : <span className="text-xs text-muted-foreground">= normal</span>}</TableCell>
                   <TableCell data-testid={`product-hpp-${p.id}`} className="text-right font-mono text-muted-foreground">{rp(p.hpp)}</TableCell>
                   <TableCell className={`text-right font-mono ${margin >= 50 ? "text-emerald-600" : "text-amber-600"}`}>{margin.toFixed(0)}%</TableCell>
                   <TableCell>

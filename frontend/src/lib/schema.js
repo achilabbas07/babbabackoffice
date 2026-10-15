@@ -1,6 +1,6 @@
 export const SCHEMA = [
   { key: "products", name: "Products", desc: "Master menu yang dijual", fields: [
-    ["id", "string", "PK"], ["name", "string"], ["category", "string"], ["price", "number"], ["type", "string"], ["image", "string"],
+    ["id", "string", "PK"], ["name", "string"], ["category", "string"], ["price", "number"], ["price_ojol", "number", "+"], ["type", "string"], ["image", "string"],
     ["inventoryId", "string", "FK", "inventory"], ["hpp", "number"],
   ] },
   { key: "recipes", name: "Recipes", desc: "Komposisi bahan per 1 porsi (tabel penghubung Products ⇄ Inventory)", fields: [
@@ -19,7 +19,7 @@ export const SCHEMA = [
     ["tableId", "string", "FK+", "tables"], ["customerId", "string", "FK+", "customers"],
   ] },
   { key: "transactions", name: "Transactions", desc: "Penjualan lunas (snapshot harga & HPP)", fields: [
-    ["id", "string", "PK"], ["date", "string"], ["type", "string"], ["method", "string"], ["tableId", "string", "FK", "tables"],
+    ["id", "string", "PK"], ["date", "string"], ["type", "Dine In|Takeaway|Walk In|Ojek Online"], ["method", "string"], ["tableId", "string", "FK", "tables"],
     ["customerId", "string", "FK+", "customers"], ["total", "number"], ["items_json[].productId", "array", "FK", "products"],
     ["userId", "string", "FK", "users"], ["cashGiven", "number"], ["waiterName", "string"],
   ] },

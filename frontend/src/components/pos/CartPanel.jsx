@@ -1,27 +1,44 @@
-import { Minus, Plus, X, Save, CreditCard, ShoppingBag } from "lucide-react";
+import { useState } from "react";
+import { Minus, Plus, X, Save, CreditCard, ShoppingBag, StickyNote } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { rp } from "@/lib/api";
 
-const OrderOptions = ({ order, setOrder, tables, customers }) => {
+export const ORDER_TYPES = [
+  { id: "Dine In", label: "Dine In", testid: "dine-in" },
+  { id: "Takeaway", label: "Takeaway", testid: "takeaway" },
+  { id: "Walk In", label: "Walk In", testid: "walk-in", direct: true },
+  { id: "Ojek Online", label: "Ojol", testid: "ojol", direct: true },
+];
+export const isDirectPay = (type) => ORDER_TYPES.some((t) => t.id === type && t.direct);
+
+const inputCls = "h-9 min-w-0 rounded-lg border border-border bg-transparent px-3 text-sm outline-none focus:border-primary";
+
+const OrderOptions = ({ order, setOrder, tables, customers, canPay }) => {
   const freeTables = tables.filter((t) => t.status !== "occupied" || t.orderData?.openBillId === order.billId);
   const set = (patch) => setOrder((o) => ({ ...o, ...patch }));
+  const types = ORDER_TYPES.filter((t) => canPay || !t.direct);
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-2 rounded-xl bg-secondary p-1">
-        {["Dine In", "Takeaway"].map((t) => (
+    <div className="space-y-2">
+      <div className="grid gap-1 rounded-xl bg-secondary p-1" style={{ gridTemplateColumns: `repeat(${types.length}, minmax(0, 1fr))` }}>
+        {types.map((t) => (
           <button
-            key={t}
-            data-testid={`order-type-${t.replace(" ", "-").toLowerCase()}`}
-            onClick={() => set({ type: t, tableId: t === "Takeaway" ? "none" : order.tableId })}
-            className={`h-9 rounded-lg text-sm font-medium transition-colors ${order.type === t ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+            key={t.id}
+            data-testid={`order-type-${t.testid}`}
+            onClick={() => set({ type: t.id, tableId: t.id === "Dine In" ? order.tableId : "none" })}
+            className={`h-8 rounded-lg text-xs font-semibold transition-colors ${order.type === t.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
           >
-            {t}
+            {t.label}
           </button>
         ))}
       </div>
+      {isDirectPay(order.type) && (
+        <p data-testid="order-direct-pay-note" className="text-[11px] text-muted-foreground">
+          {order.type === "Ojek Online" ? "Harga Ojol dipakai · langsung bayar, tanpa meja." : "Tanpa meja · langsung bayar."}
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <Select value={order.tableId} onValueChange={(v) => set({ tableId: v })} disabled={order.type !== "Dine In"}>
-          <SelectTrigger data-testid="order-table-select"><SelectValue placeholder="Meja" /></SelectTrigger>
+          <SelectTrigger data-testid="order-table-select" className="h-9"><SelectValue placeholder="Meja" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="none">Tanpa meja</SelectItem>
             {freeTables.map((t) => <SelectItem key={t.id} value={t.id}>{t.name} · {t.area}</SelectItem>)}
@@ -31,7 +48,7 @@ const OrderOptions = ({ order, setOrder, tables, customers }) => {
           value={order.customerId}
           onValueChange={(v) => set({ customerId: v, customerName: v === "none" ? "" : customers.find((c) => c.id === v)?.name || "" })}
         >
-          <SelectTrigger data-testid="order-customer-select"><SelectValue placeholder="Pelanggan" /></SelectTrigger>
+          <SelectTrigger data-testid="order-customer-select" className="h-9"><SelectValue placeholder="Pelanggan" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="none">Pelanggan umum</SelectItem>
             {customers.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
@@ -39,98 +56,85 @@ const OrderOptions = ({ order, setOrder, tables, customers }) => {
         </Select>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <input
-          data-testid="order-customer-name-input"
-          value={order.customerName}
-          onChange={(e) => set({ customerName: e.target.value })}
-          placeholder="Nama pemesan"
-          className="h-10 rounded-lg border border-border bg-transparent px-3 text-sm outline-none focus:border-primary"
-        />
-        <input
-          data-testid="order-waiter-input"
-          value={order.waiterName}
-          onChange={(e) => set({ waiterName: e.target.value })}
-          placeholder="Nama waiter"
-          className="h-10 rounded-lg border border-border bg-transparent px-3 text-sm outline-none focus:border-primary"
-        />
+        <input data-testid="order-customer-name-input" value={order.customerName} onChange={(e) => set({ customerName: e.target.value })}
+          placeholder={order.type === "Ojek Online" ? "Nama / No. order" : "Nama pemesan"} className={inputCls} />
+        <input data-testid="order-waiter-input" value={order.waiterName} onChange={(e) => set({ waiterName: e.target.value })} placeholder="Nama waiter" className={inputCls} />
       </div>
     </div>
   );
 };
 
-const CartLine = ({ item, onQty, onNotes, onRemove }) => (
-  <div data-testid={`cart-item-${item.productId}`} className="rounded-xl border border-border p-3">
-    <div className="flex items-start justify-between gap-2">
-      <div className="min-w-0">
-        <p className="truncate text-sm font-semibold">{item.name}</p>
-        <p className="font-mono text-xs text-muted-foreground">{rp(item.price)}</p>
+const CartLine = ({ item, price, onQty, onNotes, onRemove }) => {
+  const [editNote, setEditNote] = useState(false);
+  return (
+    <div data-testid={`cart-item-${item.productId}`} className="rounded-lg border border-border px-2.5 py-1.5">
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[13px] font-semibold leading-tight">{item.name}</p>
+          <p className="truncate font-mono text-[11px] text-muted-foreground">{rp(price)}{item.notes && !editNote ? ` · ${item.notes}` : ""}</p>
+        </div>
+        <button data-testid={`cart-note-toggle-${item.productId}`} onClick={() => setEditNote((v) => !v)} title="Catatan"
+          className={`grid h-7 w-7 place-items-center rounded-md ${item.notes ? "text-primary" : "text-muted-foreground"} hover:bg-secondary`}>
+          <StickyNote className="h-3.5 w-3.5" />
+        </button>
+        <div className="flex items-center rounded-md border border-border">
+          <button data-testid={`cart-dec-${item.productId}`} onClick={() => onQty(-1)} className="grid h-7 w-7 place-items-center"><Minus className="h-3 w-3" /></button>
+          <span data-testid={`cart-qty-${item.productId}`} className="w-6 text-center font-mono text-xs font-semibold">{item.qty}</span>
+          <button data-testid={`cart-inc-${item.productId}`} onClick={() => onQty(1)} className="grid h-7 w-7 place-items-center"><Plus className="h-3 w-3" /></button>
+        </div>
+        <span className="w-[72px] text-right font-mono text-xs font-semibold">{rp(price * item.qty)}</span>
+        <button data-testid={`cart-remove-${item.productId}`} onClick={onRemove} className="text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
       </div>
-      <button data-testid={`cart-remove-${item.productId}`} onClick={onRemove} className="text-muted-foreground hover:text-destructive"><X className="h-4 w-4" /></button>
+      {editNote && (
+        <input data-testid={`cart-notes-${item.productId}`} autoFocus value={item.notes} onChange={(e) => onNotes(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && setEditNote(false)} placeholder="Catatan (mis. less sugar)"
+          className="mt-1.5 h-7 w-full rounded-md border border-border bg-transparent px-2 text-xs outline-none focus:border-primary" />
+      )}
     </div>
-    <div className="mt-2 flex items-center gap-2">
-      <div className="flex items-center rounded-lg border border-border">
-        <button data-testid={`cart-dec-${item.productId}`} onClick={() => onQty(-1)} className="grid h-8 w-8 place-items-center"><Minus className="h-3.5 w-3.5" /></button>
-        <span data-testid={`cart-qty-${item.productId}`} className="w-7 text-center font-mono text-sm">{item.qty}</span>
-        <button data-testid={`cart-inc-${item.productId}`} onClick={() => onQty(1)} className="grid h-8 w-8 place-items-center"><Plus className="h-3.5 w-3.5" /></button>
-      </div>
-      <input
-        data-testid={`cart-notes-${item.productId}`}
-        value={item.notes}
-        onChange={(e) => onNotes(e.target.value)}
-        placeholder="Catatan"
-        className="h-8 min-w-0 flex-1 rounded-lg border border-border bg-transparent px-2 text-xs outline-none focus:border-primary"
-      />
-      <span className="font-mono text-sm font-semibold">{rp(item.price * item.qty)}</span>
-    </div>
-  </div>
-);
+  );
+};
 
-export const CartPanel = ({ order, setOrder, tables, customers, cart, setCart, canPay, busy, onSaveBill, onPay, onReset }) => {
-  const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+export const CartPanel = ({ order, setOrder, tables, customers, cart, setCart, priceOf, total, canPay, busy, onSaveBill, onPay, onReset }) => {
   const qty = (id, d) => setCart((c) => c.map((i) => (i.productId === id ? { ...i, qty: i.qty + d } : i)).filter((i) => i.qty > 0));
   const notes = (id, v) => setCart((c) => c.map((i) => (i.productId === id ? { ...i, notes: v } : i)));
   const remove = (id) => setCart((c) => c.filter((i) => i.productId !== id));
+  const canBill = !isDirectPay(order.type);
+  const count = cart.reduce((s, i) => s + i.qty, 0);
 
   return (
-    <aside data-testid="cart-panel" className="flex flex-col rounded-2xl border border-border bg-card md:sticky md:top-[5.5rem] md:max-h-[calc(100vh-6.5rem)]">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div>
-          <p className="font-semibold">Pesanan {order.billId && <span data-testid="cart-bill-id" className="font-mono text-primary">#{order.billId}</span>}</p>
-          <p className="text-xs text-muted-foreground">{cart.length} menu</p>
-        </div>
+    <aside data-testid="cart-panel" className="flex flex-col rounded-2xl border border-border bg-card shadow-sm md:sticky md:top-[5.5rem] md:h-[calc(100vh-6.5rem)] md:min-h-[560px]">
+      <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+        <p className="text-sm font-semibold">
+          Pesanan {order.billId && <span data-testid="cart-bill-id" className="font-mono text-primary">#{order.billId}</span>}
+          <span data-testid="cart-count" className="ml-2 text-xs font-normal text-muted-foreground">{cart.length} menu · {count} item</span>
+        </p>
         {(cart.length > 0 || order.billId) && <button data-testid="cart-reset-button" onClick={onReset} className="text-xs text-muted-foreground hover:text-foreground">Pesanan baru</button>}
       </div>
-      <div className="border-b border-border px-4 py-3"><OrderOptions order={order} setOrder={setOrder} tables={tables} customers={customers} /></div>
-      <div className="min-h-[140px] flex-1 space-y-2 overflow-y-auto px-4 py-3">
+      <div className="border-b border-border px-4 py-2.5"><OrderOptions order={order} setOrder={setOrder} tables={tables} customers={customers} canPay={canPay} /></div>
+      <div data-testid="cart-list" className="min-h-[312px] flex-1 space-y-1.5 overflow-y-auto px-3 py-2.5">
         {cart.length === 0 ? (
-          <div className="grid h-full place-items-center py-8 text-center text-sm text-muted-foreground">
+          <div className="grid h-full place-items-center text-center text-sm text-muted-foreground">
             <div><ShoppingBag className="mx-auto mb-2 h-7 w-7" />Ketuk menu untuk menambahkan</div>
           </div>
         ) : (
-          cart.map((i) => <CartLine key={i.productId} item={i} onQty={(d) => qty(i.productId, d)} onNotes={(v) => notes(i.productId, v)} onRemove={() => remove(i.productId)} />)
+          cart.map((i) => <CartLine key={i.productId} item={i} price={priceOf(i)} onQty={(d) => qty(i.productId, d)} onNotes={(v) => notes(i.productId, v)} onRemove={() => remove(i.productId)} />)
         )}
       </div>
-      <div className="space-y-3 border-t border-border px-4 py-3">
+      <div className="space-y-2.5 border-t border-border px-4 py-3">
         <div className="flex items-baseline justify-between">
-          <span className="text-sm text-muted-foreground">Total</span>
-          <span data-testid="cart-total" className="font-mono text-2xl font-bold text-primary">{rp(total)}</span>
+          <span className="text-sm text-muted-foreground">Total {order.type === "Ojek Online" && <span className="text-xs text-primary">(harga Ojol)</span>}</span>
+          <span data-testid="cart-total" className="font-mono text-xl font-bold text-primary">{rp(total)}</span>
         </div>
-        <div className={`grid gap-2 ${canPay ? "grid-cols-2" : "grid-cols-1"}`}>
-          <button
-            data-testid="save-open-bill-button"
-            disabled={!cart.length || busy}
-            onClick={onSaveBill}
-            className="flex h-12 items-center justify-center gap-2 rounded-xl border border-border font-semibold transition-colors hover:border-primary disabled:opacity-40"
-          >
-            <Save className="h-4 w-4" /> {order.billId ? "Update Bill" : "Open Bill"}
-          </button>
+        <div className={`grid gap-2 ${canPay && canBill ? "grid-cols-2" : "grid-cols-1"}`}>
+          {canBill && (
+            <button data-testid="save-open-bill-button" disabled={!cart.length || busy} onClick={onSaveBill}
+              className="flex h-11 items-center justify-center gap-2 rounded-xl border border-border font-semibold transition-colors hover:border-primary disabled:opacity-40">
+              <Save className="h-4 w-4" /> {order.billId ? "Update Bill" : "Open Bill"}
+            </button>
+          )}
           {canPay && (
-            <button
-              data-testid="pay-button"
-              disabled={!cart.length || busy}
-              onClick={onPay}
-              className="flex h-12 items-center justify-center gap-2 rounded-xl bg-primary font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
-            >
+            <button data-testid="pay-button" disabled={!cart.length || busy} onClick={onPay}
+              className="flex h-11 items-center justify-center gap-2 rounded-xl bg-primary font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40">
               <CreditCard className="h-4 w-4" /> Bayar
             </button>
           )}

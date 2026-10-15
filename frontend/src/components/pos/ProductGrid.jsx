@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Search, UtensilsCrossed } from "lucide-react";
 import { rp } from "@/lib/api";
 
-export const ProductGrid = ({ products, onAdd }) => {
+export const ProductGrid = ({ products, onAdd, ojol }) => {
   const [cat, setCat] = useState("Semua");
   const [q, setQ] = useState("");
   const cats = useMemo(() => ["Semua", ...new Set(products.map((p) => p.category))], [products]);
@@ -52,7 +52,9 @@ export const ProductGrid = ({ products, onAdd }) => {
             </div>
             <div className="p-2.5">
               <p className="line-clamp-2 min-h-[2.25rem] text-[13px] font-semibold leading-snug">{p.name}</p>
-              <p className="mt-1 font-mono text-xs font-semibold text-primary">{rp(p.price)}</p>
+              <p data-testid={`pos-product-price-${p.id}`} className="mt-1 font-mono text-xs font-semibold text-primary">
+                {rp(ojol && p.price_ojol > 0 ? p.price_ojol : p.price)}{ojol && <span className="ml-1 font-sans text-[10px] text-muted-foreground">Ojol</span>}
+              </p>
             </div>
           </button>
         ))}
