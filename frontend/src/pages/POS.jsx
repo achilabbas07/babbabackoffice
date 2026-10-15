@@ -1,0 +1,114 @@
+import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
+import { api, errMsg } from "@/lib/api";
+import { ProductGrid } from "@/components/pos/ProductGrid";
+import { CartPanel } from "@/components/pos/CartPanel";
+import { PayDialog } from "@/components/pos/PayDialog";
+import { ReceiptDialog } from "@/components/ReceiptDialog";
+
+const emptyOrder = (user) => ({
+  billId: null, type: "Dine In", tableId: "none", customerId: "none", customerName: "", waiterName: user.role === "waiter" ? user.name : "",
+});
+
+export default function POS() {
+  const { user } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const [products, setProducts] = useState([]);
+  const [tables, setTables] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [order, setOrder] = useState(() => emptyOrder(user));
+  const [cart, setCart] = useState([]);
+  const [payOpen, setPayOpen] = useState(false);
+  const [receipt, setReceipt] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const loadRefs = useCallback(async () => {
+    try {
+      const [p, t, c] = await Promise.all([api.get("/products"), api.get("/tables"), api.get("/customers")]);
+      setProducts(p.data);
+      setTables(t.data);
+      setCustomers(c.data);
+    } catch (e) {
+      toast.error(errMsg(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRefs();
+  }, [loadRefs]);
+
+  useEffect(() => {
+    const billId = params.get("bill");
+    const tableId = params.get("table");
+    if (billId) {
+      api.get(`/open-bills/${billId}`).then(({ data }) => {
+        setOrder({ billId: data.id, type: data.type, tableId: data.tableId || "none", customerId: data.customerId || "none", customerName: data.customerName, waiterName: data.waiterName });
+        setCart(data.items_json.map((i) => ({ productId: i.productId, name: i.productName, price: i.price, qty: i.qty, notes: i.notes || "" })));
+      }).catch((e) => toast.error(errMsg(e)));
+    } else if (tableId) {
+      setOrder((o) => ({ ...o, type: "Dine In", tableId }));
+    }
+  }, [params]);
+
+  const add = (p) => setCart((c) => (c.some((i) => i.productId === p.id)
+    ? c.map((i) => (i.productId === p.id ? { ...i, qty: i.qty + 1 } : i))
+    : [...c, { productId: p.id, name: p.name, price: p.price, qty: 1, notes: "" }]));
+
+  const reset = () => {
+    setOrder(emptyOrder(user));
+    setCart([]);
+    setParams({});
+  };
+
+  const payload = () => ({
+    type: order.type,
+    tableId: order.type === "Dine In" && order.tableId !== "none" ? order.tableId : null,
+    customerId: order.customerId !== "none" ? order.customerId : null,
+    customerName: order.customerName,
+    waiterName: order.waiterName,
+    items: cart.map(({ productId, qty, notes }) => ({ productId, qty, notes })),
+  });
+
+  const run = async (fn) => {
+    setBusy(true);
+    try {
+      await fn();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveBill = () => run(async () => {
+    const { data } = order.billId ? await api.put(`/open-bills/${order.billId}`, payload()) : await api.post("/open-bills", payload());
+    toast.success(`Open bill ${data.id} tersimpan`);
+    reset();
+    loadRefs();
+  });
+
+  const pay = (method, cashGiven) => run(async () => {
+    const { data } = await api.post("/transactions", { ...payload(), method, cashGiven, openBillId: order.billId });
+    setPayOpen(false);
+    setReceipt(data);
+    toast.success(`Transaksi ${data.id} berhasil`);
+    reset();
+    loadRefs();
+  });
+
+  const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
+      <ProductGrid products={products} onAdd={add} />
+      <CartPanel
+        order={order} setOrder={setOrder} tables={tables} customers={customers} cart={cart} setCart={setCart}
+        canPay={user.role !== "waiter"} busy={busy} onSaveBill={saveBill} onPay={() => setPayOpen(true)} onReset={reset}
+      />
+      <PayDialog open={payOpen} onOpenChange={setPayOpen} total={total} onPay={pay} busy={busy} />
+      <ReceiptDialog trx={receipt} onClose={() => setReceipt(null)} />
+    </div>
+  );
+}

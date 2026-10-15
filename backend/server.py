@@ -1,0 +1,658 @@
+from core import (  # noqa: I001
+    ALL_ROLES, Customer, Expense, InventoryItem, OpenBill, Product, Purchase, Recipe, Table, Transaction, User,
+    client, create_token, db, hash_pin, next_id, now_iso, recalc_hpp, recalc_hpp_for_inventory, require_roles,
+    to_utc_iso, verify_pin, get_current_user,
+)
+from seed import seed_all
+
+import logging
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
+from typing import List, Literal, Optional
+
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
+from pydantic import BaseModel, Field
+from starlette.middleware.cors import CORSMiddleware
+import os
+
+app = FastAPI(title="F&B POS API")
+api = APIRouter(prefix="/api")
+logger = logging.getLogger(__name__)
+
+ADMIN = require_roles("admin")
+STAFF = require_roles("admin", "kasir")
+ANY = require_roles(*ALL_ROLES)
+
+
+# ---------- Input schemas ----------
+class LoginIn(BaseModel):
+    pin: str = Field(pattern=r"^\d{4,6}$")
+
+
+class UserIn(BaseModel):
+    name: str = Field(min_length=1)
+    role: Literal["admin", "kasir", "waiter"]
+    pin: Optional[str] = Field(None, pattern=r"^\d{4,6}$")
+
+
+class ProductIn(BaseModel):
+    name: str = Field(min_length=1)
+    category: str = Field(min_length=1)
+    price: float = Field(ge=0)
+    type: Literal["dine_in", "takeaway", "both"] = "both"
+    image: str = ""
+    inventoryId: Optional[str] = None
+    hpp: float = Field(0, ge=0)
+
+
+class RecipeLine(BaseModel):
+    inventoryId: str
+    qty_needed: float = Field(gt=0)
+
+
+class TableIn(BaseModel):
+    name: str = Field(min_length=1)
+    area: str = Field(min_length=1)
+
+
+class TableStatusIn(BaseModel):
+    status: Literal["available", "reserved"]
+
+
+class CustomerIn(BaseModel):
+    name: str = Field(min_length=1)
+    wa: str = ""
+    email: str = ""
+
+
+class InventoryIn(BaseModel):
+    name: str = Field(min_length=1)
+    type: str = Field(min_length=1)
+    stock: float = Field(0, ge=0)
+    unit: str = Field(min_length=1)
+    cost_per_unit: float = Field(ge=0)
+    min_stock: float = Field(0, ge=0)
+
+
+class OrderItemIn(BaseModel):
+    productId: str
+    qty: int = Field(gt=0)
+    notes: str = ""
+
+
+class OpenBillIn(BaseModel):
+    type: Literal["Dine In", "Takeaway"]
+    tableId: Optional[str] = None
+    customerId: Optional[str] = None
+    customerName: str = ""
+    waiterName: str = ""
+    items: List[OrderItemIn] = Field(min_length=1)
+
+
+class TransactionIn(OpenBillIn):
+    method: Literal["Cash", "QRIS", "Card", "Debit"]
+    cashGiven: float = Field(0, ge=0)
+    openBillId: Optional[str] = None
+
+
+class PurchaseItemIn(BaseModel):
+    inventoryId: str
+    qty: float = Field(gt=0)
+    cost_per_unit: float = Field(ge=0)
+
+
+class PurchaseIn(BaseModel):
+    date: Optional[str] = None
+    supplier: str = Field(min_length=1)
+    items: List[PurchaseItemIn] = Field(min_length=1)
+
+
+class ExpenseIn(BaseModel):
+    date: Optional[str] = None
+    category: str = Field(min_length=1)
+    description: str = ""
+    amount: float = Field(gt=0)
+
+
+# ---------- Helpers ----------
+async def get_or_404(coll: str, doc_id: str, label: str) -> dict:
+    doc = await db[coll].find_one({"_id": doc_id})
+    if not doc:
+        raise HTTPException(404, f"{label} {doc_id} tidak ditemukan")
+    return doc
+
+
+async def build_items(items: List[OrderItemIn]):
+    ids = list({i.productId for i in items})
+    prods = {d["_id"]: Product.from_mongo(d) async for d in db.products.find({"_id": {"$in": ids}})}
+    out = []
+    for i in items:
+        p = prods.get(i.productId)
+        if not p:
+            raise HTTPException(404, f"Produk {i.productId} tidak ditemukan")
+        out.append({"productId": p.id, "productName": p.name, "qty": i.qty, "price": p.price, "hpp": p.hpp,
+                    "notes": i.notes, "subtotal": p.price * i.qty})
+    return out, sum(x["subtotal"] for x in out)
+
+
+async def stock_needs(items: List[dict]) -> dict:
+    pids = list({i["productId"] for i in items})
+    by_prod = defaultdict(list)
+    async for r in db.recipes.find({"productId": {"$in": pids}}):
+        by_prod[r["productId"]].append(r)
+    direct = {d["_id"]: d.get("inventoryId") async for d in db.products.find({"_id": {"$in": pids}})}
+    needs = defaultdict(float)
+    for it in items:
+        if by_prod.get(it["productId"]):
+            for r in by_prod[it["productId"]]:
+                needs[r["inventoryId"]] += r["qty_needed"] * it["qty"]
+        elif direct.get(it["productId"]):
+            needs[direct[it["productId"]]] += it["qty"]
+    return needs
+
+
+async def consume_stock(needs: dict):
+    inv = {d["_id"]: d async for d in db.inventory.find({"_id": {"$in": list(needs)}})}
+    for inv_id, qty in needs.items():
+        d = inv.get(inv_id)
+        if not d:
+            raise HTTPException(400, f"Bahan {inv_id} tidak ditemukan di inventory")
+        if d["stock"] + 1e-9 < qty:
+            raise HTTPException(400, f"Stok {d['name']} tidak cukup (butuh {qty:g} {d['unit']}, tersedia {d['stock']:g})")
+    done = []
+    for inv_id, qty in needs.items():
+        res = await db.inventory.update_one({"_id": inv_id, "stock": {"$gte": qty - 1e-9}}, {"$inc": {"stock": -qty}})
+        if res.modified_count == 0:
+            for did, dq in done:
+                await db.inventory.update_one({"_id": did}, {"$inc": {"stock": dq}})
+            raise HTTPException(409, "Stok berubah saat diproses, silakan coba lagi")
+        done.append((inv_id, qty))
+
+
+async def occupy_table(table_id: str, bill: OpenBill):
+    t = await get_or_404("tables", table_id, "Meja")
+    od = t.get("orderData") or {}
+    if t["status"] == "occupied" and od.get("openBillId") != bill.id:
+        raise HTTPException(409, f"{t['name']} sedang terisi")
+    order_data = {"openBillId": bill.id, "customerName": bill.customerName, "waiterName": bill.waiterName,
+                  "total": bill.total, "itemCount": sum(i["qty"] for i in bill.items_json),
+                  "startTime": od.get("startTime") if od.get("openBillId") == bill.id else bill.timestamp}
+    await db.tables.update_one({"_id": table_id}, {"$set": {"status": "occupied", "orderData": order_data}})
+
+
+async def free_table(table_id: Optional[str]):
+    if table_id:
+        await db.tables.update_one({"_id": table_id}, {"$set": {"status": "available", "orderData": None}})
+
+
+async def pin_in_use(pin: str, exclude: Optional[str] = None) -> bool:
+    async for d in db.users.find({}):
+        if d["_id"] != exclude and verify_pin(pin, d["pin"]):
+            return True
+    return False
+
+
+# ---------- Auth ----------
+@api.get("/")
+async def root():
+    return {"message": "F&B POS API"}
+
+
+@api.post("/auth/login")
+async def login(body: LoginIn, request: Request):
+    ident = (request.headers.get("x-forwarded-for") or (request.client.host if request.client else "")).split(",")[0].strip()
+    now = datetime.now(timezone.utc)
+    att = await db.login_attempts.find_one({"identifier": ident}) or {}
+    locked = att.get("locked_until")
+    if locked and datetime.fromisoformat(locked) > now:
+        raise HTTPException(429, "Terlalu banyak percobaan PIN salah. Coba lagi dalam 15 menit.")
+    async for doc in db.users.find({}):
+        if verify_pin(body.pin, doc["pin"]):
+            await db.login_attempts.delete_one({"identifier": ident})
+            user = User.from_mongo(doc)
+            return {"token": create_token(user.id), "user": user}
+    count = 1 if locked else att.get("count", 0) + 1
+    update = {"count": count, "locked_until": (now + timedelta(minutes=15)).isoformat() if count >= 5 else None}
+    await db.login_attempts.update_one({"identifier": ident}, {"$set": update}, upsert=True)
+    raise HTTPException(401, "PIN salah")
+
+
+@api.get("/auth/me")
+async def me(user: User = Depends(get_current_user)):
+    return user
+
+
+# ---------- Users ----------
+@api.get("/users")
+async def list_users(_: User = Depends(ADMIN)):
+    return [User.from_mongo(d) for d in await db.users.find().sort("_id").to_list(None)]
+
+
+@api.post("/users")
+async def create_user(body: UserIn, _: User = Depends(ADMIN)):
+    if not body.pin:
+        raise HTTPException(400, "PIN wajib diisi (4-6 digit)")
+    if await pin_in_use(body.pin):
+        raise HTTPException(409, "PIN sudah digunakan pengguna lain")
+    user = User(id=await next_id("USR"), name=body.name, role=body.role)
+    await db.users.insert_one({**user.to_mongo(), "pin": hash_pin(body.pin)})
+    return user
+
+
+@api.put("/users/{uid}")
+async def update_user(uid: str, body: UserIn, current: User = Depends(ADMIN)):
+    await get_or_404("users", uid, "Pengguna")
+    if uid == current.id and body.role != "admin":
+        raise HTTPException(400, "Tidak bisa menurunkan peran akun sendiri")
+    update = {"name": body.name, "role": body.role}
+    if body.pin:
+        if await pin_in_use(body.pin, exclude=uid):
+            raise HTTPException(409, "PIN sudah digunakan pengguna lain")
+        update["pin"] = hash_pin(body.pin)
+    await db.users.update_one({"_id": uid}, {"$set": update})
+    return User.from_mongo(await db.users.find_one({"_id": uid}))
+
+
+@api.delete("/users/{uid}")
+async def delete_user(uid: str, current: User = Depends(ADMIN)):
+    if uid == current.id:
+        raise HTTPException(400, "Tidak bisa menghapus akun sendiri")
+    res = await db.users.delete_one({"_id": uid})
+    if not res.deleted_count:
+        raise HTTPException(404, "Pengguna tidak ditemukan")
+    return {"ok": True}
+
+
+# ---------- Products & Recipes ----------
+async def validate_inventory_ref(inv_id: Optional[str]):
+    if inv_id:
+        await get_or_404("inventory", inv_id, "Bahan")
+
+
+@api.get("/products")
+async def list_products(_: User = Depends(ANY)):
+    docs = await db.products.find().sort([("category", 1), ("name", 1)]).to_list(None)
+    return [Product.from_mongo(d) for d in docs]
+
+
+@api.post("/products")
+async def create_product(body: ProductIn, _: User = Depends(ADMIN)):
+    await validate_inventory_ref(body.inventoryId)
+    product = Product(id=await next_id("PRD"), **body.model_dump())
+    await db.products.insert_one(product.to_mongo())
+    await recalc_hpp(product.id)
+    return Product.from_mongo(await db.products.find_one({"_id": product.id}))
+
+
+@api.put("/products/{pid}")
+async def update_product(pid: str, body: ProductIn, _: User = Depends(ADMIN)):
+    await get_or_404("products", pid, "Produk")
+    await validate_inventory_ref(body.inventoryId)
+    await db.products.update_one({"_id": pid}, {"$set": body.model_dump()})
+    await recalc_hpp(pid)
+    return Product.from_mongo(await db.products.find_one({"_id": pid}))
+
+
+@api.delete("/products/{pid}")
+async def delete_product(pid: str, _: User = Depends(ADMIN)):
+    res = await db.products.delete_one({"_id": pid})
+    if not res.deleted_count:
+        raise HTTPException(404, "Produk tidak ditemukan")
+    await db.recipes.delete_many({"productId": pid})
+    return {"ok": True}
+
+
+@api.get("/recipes")
+async def list_recipes(_: User = Depends(ANY)):
+    return [Recipe.from_mongo(d) for d in await db.recipes.find().to_list(None)]
+
+
+@api.get("/products/{pid}/recipes")
+async def product_recipes(pid: str, _: User = Depends(ANY)):
+    return [Recipe.from_mongo(d) for d in await db.recipes.find({"productId": pid}).to_list(None)]
+
+
+@api.put("/products/{pid}/recipes")
+async def set_recipes(pid: str, lines: List[RecipeLine], _: User = Depends(ADMIN)):
+    await get_or_404("products", pid, "Produk")
+    ids = [ln.inventoryId for ln in lines]
+    if len(ids) != len(set(ids)):
+        raise HTTPException(400, "Bahan yang sama tidak boleh muncul dua kali dalam resep")
+    for inv_id in ids:
+        await get_or_404("inventory", inv_id, "Bahan")
+    await db.recipes.delete_many({"productId": pid})
+    recipes = [Recipe(productId=pid, inventoryId=ln.inventoryId, qty_needed=ln.qty_needed) for ln in lines]
+    if recipes:
+        await db.recipes.insert_many([r.to_mongo() for r in recipes])
+    await recalc_hpp(pid)
+    return {"product": Product.from_mongo(await db.products.find_one({"_id": pid})), "recipes": recipes}
+
+
+# ---------- Inventory ----------
+@api.get("/inventory")
+async def list_inventory(_: User = Depends(ADMIN)):
+    return [InventoryItem.from_mongo(d) for d in await db.inventory.find().sort("_id").to_list(None)]
+
+
+@api.post("/inventory")
+async def create_inventory(body: InventoryIn, _: User = Depends(ADMIN)):
+    item = InventoryItem(id=await next_id("INV"), **body.model_dump())
+    await db.inventory.insert_one(item.to_mongo())
+    return item
+
+
+@api.put("/inventory/{iid}")
+async def update_inventory(iid: str, body: InventoryIn, _: User = Depends(ADMIN)):
+    old = await get_or_404("inventory", iid, "Bahan")
+    await db.inventory.update_one({"_id": iid}, {"$set": body.model_dump()})
+    if old["cost_per_unit"] != body.cost_per_unit:
+        await recalc_hpp_for_inventory(iid)
+    return InventoryItem.from_mongo(await db.inventory.find_one({"_id": iid}))
+
+
+@api.delete("/inventory/{iid}")
+async def delete_inventory(iid: str, _: User = Depends(ADMIN)):
+    await get_or_404("inventory", iid, "Bahan")
+    pids = set(await db.recipes.distinct("productId", {"inventoryId": iid}))
+    pids |= set(await db.products.distinct("_id", {"inventoryId": iid}))
+    if pids:
+        names = [d["name"] async for d in db.products.find({"_id": {"$in": list(pids)}})]
+        raise HTTPException(409, f"Bahan masih dipakai oleh produk: {', '.join(names)}")
+    await db.inventory.delete_one({"_id": iid})
+    return {"ok": True}
+
+
+# ---------- Tables ----------
+@api.get("/tables")
+async def list_tables(_: User = Depends(ANY)):
+    return [Table.from_mongo(d) for d in await db.tables.find().sort([("area", 1), ("_id", 1)]).to_list(None)]
+
+
+@api.post("/tables")
+async def create_table(body: TableIn, _: User = Depends(ADMIN)):
+    table = Table(id=await next_id("TBL"), **body.model_dump())
+    await db.tables.insert_one(table.to_mongo())
+    return table
+
+
+@api.put("/tables/{tid}")
+async def update_table(tid: str, body: TableIn, _: User = Depends(ADMIN)):
+    await get_or_404("tables", tid, "Meja")
+    await db.tables.update_one({"_id": tid}, {"$set": body.model_dump()})
+    return Table.from_mongo(await db.tables.find_one({"_id": tid}))
+
+
+@api.put("/tables/{tid}/status")
+async def set_table_status(tid: str, body: TableStatusIn, _: User = Depends(ANY)):
+    t = await get_or_404("tables", tid, "Meja")
+    if t["status"] == "occupied":
+        raise HTTPException(409, "Meja sedang terisi, selesaikan atau batalkan open bill terlebih dahulu")
+    await db.tables.update_one({"_id": tid}, {"$set": {"status": body.status}})
+    return Table.from_mongo(await db.tables.find_one({"_id": tid}))
+
+
+@api.delete("/tables/{tid}")
+async def delete_table(tid: str, _: User = Depends(ADMIN)):
+    t = await get_or_404("tables", tid, "Meja")
+    if t["status"] == "occupied":
+        raise HTTPException(409, "Meja sedang terisi, tidak bisa dihapus")
+    await db.tables.delete_one({"_id": tid})
+    return {"ok": True}
+
+
+# ---------- Customers ----------
+@api.get("/customers")
+async def list_customers(_: User = Depends(ANY)):
+    return [Customer.from_mongo(d) for d in await db.customers.find().sort("name", 1).to_list(None)]
+
+
+@api.post("/customers")
+async def create_customer(body: CustomerIn, _: User = Depends(STAFF)):
+    c = Customer(id=await next_id("CUST"), **body.model_dump())
+    await db.customers.insert_one(c.to_mongo())
+    return c
+
+
+@api.put("/customers/{cid}")
+async def update_customer(cid: str, body: CustomerIn, _: User = Depends(STAFF)):
+    await get_or_404("customers", cid, "Pelanggan")
+    await db.customers.update_one({"_id": cid}, {"$set": body.model_dump()})
+    return Customer.from_mongo(await db.customers.find_one({"_id": cid}))
+
+
+@api.delete("/customers/{cid}")
+async def delete_customer(cid: str, _: User = Depends(ADMIN)):
+    res = await db.customers.delete_one({"_id": cid})
+    if not res.deleted_count:
+        raise HTTPException(404, "Pelanggan tidak ditemukan")
+    return {"ok": True}
+
+
+# ---------- Open Bills ----------
+async def compose_bill(body: OpenBillIn, user: User, bill_id: str, timestamp: str) -> OpenBill:
+    items, total = await build_items(body.items)
+    cust = await get_or_404("customers", body.customerId, "Pelanggan") if body.customerId else None
+    return OpenBill(
+        id=bill_id, timestamp=timestamp, type=body.type, total=total, items_json=items,
+        customerName=body.customerName or (cust["name"] if cust else ""), customerId=body.customerId,
+        tableId=body.tableId if body.type == "Dine In" else None, userId=user.id, userName=user.name,
+        waiterName=body.waiterName or (user.name if user.role == "waiter" else ""),
+    )
+
+
+@api.get("/open-bills")
+async def list_open_bills(_: User = Depends(ANY)):
+    return [OpenBill.from_mongo(d) for d in await db.open_bills.find().sort("timestamp", -1).to_list(None)]
+
+
+@api.get("/open-bills/{bid}")
+async def get_open_bill(bid: str, _: User = Depends(ANY)):
+    return OpenBill.from_mongo(await get_or_404("open_bills", bid, "Open bill"))
+
+
+@api.post("/open-bills")
+async def create_open_bill(body: OpenBillIn, user: User = Depends(ANY)):
+    bill = await compose_bill(body, user, await next_id("BILL"), now_iso())
+    if bill.tableId:
+        await occupy_table(bill.tableId, bill)
+    await db.open_bills.insert_one(bill.to_mongo())
+    return bill
+
+
+@api.put("/open-bills/{bid}")
+async def update_open_bill(bid: str, body: OpenBillIn, user: User = Depends(ANY)):
+    old = OpenBill.from_mongo(await get_or_404("open_bills", bid, "Open bill"))
+    bill = await compose_bill(body, user, bid, old.timestamp)
+    bill.userId, bill.userName = old.userId, old.userName
+    if bill.tableId:
+        await occupy_table(bill.tableId, bill)
+    if old.tableId and old.tableId != bill.tableId:
+        await free_table(old.tableId)
+    await db.open_bills.replace_one({"_id": bid}, bill.to_mongo())
+    return bill
+
+
+@api.delete("/open-bills/{bid}")
+async def delete_open_bill(bid: str, _: User = Depends(STAFF)):
+    bill = await get_or_404("open_bills", bid, "Open bill")
+    await db.open_bills.delete_one({"_id": bid})
+    await free_table(bill.get("tableId"))
+    return {"ok": True}
+
+
+# ---------- Transactions ----------
+@api.get("/transactions")
+async def list_transactions(start: Optional[str] = None, end: Optional[str] = None, customerId: Optional[str] = None,
+                            _: User = Depends(STAFF)):
+    query = {}
+    if start or end:
+        query["date"] = {}
+        if start:
+            query["date"]["$gte"] = to_utc_iso(start)
+        if end:
+            query["date"]["$lt"] = to_utc_iso(end)
+    if customerId:
+        query["customerId"] = customerId
+    docs = await db.transactions.find(query).sort("date", -1).to_list(1000)
+    return [Transaction.from_mongo(d) for d in docs]
+
+
+@api.get("/transactions/{tid}")
+async def get_transaction(tid: str, _: User = Depends(STAFF)):
+    return Transaction.from_mongo(await get_or_404("transactions", tid, "Transaksi"))
+
+
+@api.post("/transactions")
+async def create_transaction(body: TransactionIn, user: User = Depends(STAFF)):
+    bill = OpenBill.from_mongo(await get_or_404("open_bills", body.openBillId, "Open bill")) if body.openBillId else None
+    table_id = (body.tableId or (bill.tableId if bill else None)) if body.type == "Dine In" else None
+    customer_id = body.customerId or (bill.customerId if bill else None)
+    table = await get_or_404("tables", table_id, "Meja") if table_id else None
+    if table and table["status"] == "occupied" and (table.get("orderData") or {}).get("openBillId") != (bill.id if bill else None):
+        raise HTTPException(409, f"{table['name']} sedang terisi oleh open bill lain")
+    customer = await get_or_404("customers", customer_id, "Pelanggan") if customer_id else None
+    items, total = await build_items(body.items)
+    if body.method == "Cash" and body.cashGiven < total:
+        raise HTTPException(400, "Uang tunai kurang dari total")
+    cash = body.cashGiven if body.method == "Cash" else total
+
+    await consume_stock(await stock_needs(items))
+
+    trx = Transaction(
+        id=await next_id(f"TRX-{datetime.now(timezone.utc):%Y%m%d}", 4), date=now_iso(), type=body.type,
+        method=body.method, tableId=table_id, customerId=customer_id, total=total, items_json=items,
+        userId=user.id, userName=user.name, cashGiven=cash, change=cash - total,
+        waiterName=body.waiterName or (bill.waiterName if bill else ""),
+        tableName=table["name"] if table else "",
+        customerName=customer["name"] if customer else (body.customerName or (bill.customerName if bill else "")),
+    )
+    await db.transactions.insert_one(trx.to_mongo())
+    if customer:
+        await db.customers.update_one({"_id": customer_id}, {"$inc": {"visits": 1, "total_spent": total, "points": int(total // 10000)}})
+    if bill:
+        await db.open_bills.delete_one({"_id": bill.id})
+        await free_table(bill.tableId)
+    await free_table(table_id)
+    return trx
+
+
+# ---------- Purchases ----------
+@api.get("/purchases")
+async def list_purchases(_: User = Depends(ADMIN)):
+    return [Purchase.from_mongo(d) for d in await db.purchases.find().sort("date", -1).to_list(1000)]
+
+
+@api.post("/purchases")
+async def create_purchase(body: PurchaseIn, user: User = Depends(ADMIN)):
+    ids = list({i.inventoryId for i in body.items})
+    inv = {d["_id"]: d async for d in db.inventory.find({"_id": {"$in": ids}})}
+    missing = [i for i in ids if i not in inv]
+    if missing:
+        raise HTTPException(404, f"Bahan tidak ditemukan: {', '.join(missing)}")
+    items = [{"inventoryId": i.inventoryId, "name": inv[i.inventoryId]["name"], "unit": inv[i.inventoryId]["unit"],
+              "qty": i.qty, "cost_per_unit": i.cost_per_unit, "subtotal": i.qty * i.cost_per_unit} for i in body.items]
+    purchase = Purchase(id=await next_id(f"PO-{datetime.now(timezone.utc):%Y%m%d}"),
+                        date=to_utc_iso(body.date) if body.date else now_iso(), supplier=body.supplier,
+                        items_json=items, total_cost=sum(i["subtotal"] for i in items), userId=user.id, userName=user.name)
+    await db.purchases.insert_one(purchase.to_mongo())
+    for it in items:
+        await db.inventory.update_one({"_id": it["inventoryId"]}, {"$inc": {"stock": it["qty"]}, "$set": {"cost_per_unit": it["cost_per_unit"]}})
+    for inv_id in ids:
+        await recalc_hpp_for_inventory(inv_id)
+    return purchase
+
+
+# ---------- Expenses ----------
+@api.get("/expenses")
+async def list_expenses(_: User = Depends(ADMIN)):
+    return [Expense.from_mongo(d) for d in await db.expenses.find().sort("date", -1).to_list(1000)]
+
+
+@api.post("/expenses")
+async def create_expense(body: ExpenseIn, user: User = Depends(ADMIN)):
+    exp = Expense(id=await next_id("EXP"), date=to_utc_iso(body.date) if body.date else now_iso(), category=body.category,
+                  description=body.description, amount=body.amount, userId=user.id, userName=user.name)
+    await db.expenses.insert_one(exp.to_mongo())
+    return exp
+
+
+@api.delete("/expenses/{eid}")
+async def delete_expense(eid: str, _: User = Depends(ADMIN)):
+    res = await db.expenses.delete_one({"_id": eid})
+    if not res.deleted_count:
+        raise HTTPException(404, "Pengeluaran tidak ditemukan")
+    return {"ok": True}
+
+
+# ---------- Reports ----------
+@api.get("/reports/summary")
+async def report_summary(start: str, end: str, tz_offset: int = 0, _: User = Depends(ADMIN)):
+    rng = {"$gte": to_utc_iso(start), "$lt": to_utc_iso(end)}
+    txs = await db.transactions.find({"date": rng}).to_list(None)
+    exps = await db.expenses.find({"date": rng}).to_list(None)
+    purchases = await db.purchases.find({"date": rng}).to_list(None)
+
+    by_method, by_type, exp_cat = defaultdict(float), defaultdict(float), defaultdict(float)
+    products = {}
+    daily = defaultdict(lambda: {"revenue": 0.0, "cogs": 0.0, "count": 0})
+    revenue = cogs = 0.0
+    for t in txs:
+        t_cogs = sum(i["hpp"] * i["qty"] for i in t["items_json"])
+        revenue += t["total"]
+        cogs += t_cogs
+        by_method[t["method"]] += t["total"]
+        by_type[t["type"]] += t["total"]
+        day = (datetime.fromisoformat(t["date"]) - timedelta(minutes=tz_offset)).strftime("%Y-%m-%d")
+        daily[day]["revenue"] += t["total"]
+        daily[day]["cogs"] += t_cogs
+        daily[day]["count"] += 1
+        for i in t["items_json"]:
+            p = products.setdefault(i["productId"], {"productId": i["productId"], "name": i["productName"], "qty": 0, "revenue": 0.0, "profit": 0.0})
+            p["qty"] += i["qty"]
+            p["revenue"] += i["price"] * i["qty"]
+            p["profit"] += (i["price"] - i["hpp"]) * i["qty"]
+    for e in exps:
+        exp_cat[e["category"]] += e["amount"]
+    expense_total = sum(exp_cat.values())
+    return {
+        "revenue": revenue, "cogs": cogs, "gross_profit": revenue - cogs, "expenses": expense_total,
+        "net_profit": revenue - cogs - expense_total, "purchases": sum(p["total_cost"] for p in purchases),
+        "transaction_count": len(txs), "avg_ticket": revenue / len(txs) if txs else 0,
+        "by_method": [{"method": k, "total": v} for k, v in sorted(by_method.items(), key=lambda x: -x[1])],
+        "by_type": [{"type": k, "total": v} for k, v in by_type.items()],
+        "top_products": sorted(products.values(), key=lambda x: -x["qty"])[:8],
+        "daily": [{"date": k, **v, "profit": v["revenue"] - v["cogs"]} for k, v in sorted(daily.items())],
+        "expenses_by_category": [{"category": k, "total": v} for k, v in sorted(exp_cat.items(), key=lambda x: -x[1])],
+    }
+
+
+# ---------- Schema ----------
+COLLECTIONS = ["products", "tables", "transactions", "customers", "inventory", "recipes", "purchases", "expenses", "users", "open_bills"]
+
+
+@api.get("/schema")
+async def schema_counts(_: User = Depends(ADMIN)):
+    return {"counts": {c: await db[c].count_documents({}) for c in COLLECTIONS}}
+
+
+app.include_router(api)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+
+@app.on_event("startup")
+async def startup():
+    await seed_all()
+
+
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    client.close()

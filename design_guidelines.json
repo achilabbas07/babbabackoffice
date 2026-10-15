@@ -1,0 +1,201 @@
+{
+  "project_title": "Sistem POS & Manajemen F&B Terpadu (Kuliner POS)",
+  "language": "Indonesian (id-ID)",
+  "currency": "IDR (Rp)",
+  "design_archetype": "ARCHETYPE 1: ORGANIC & EARTHY / CAFE BISTRO WARM DIGITAL PRO",
+  "theme_strategy": "Warm Dark-Mode Primary (Espresso Charcoal #1A1614 & Amber Accent #F59E0B) with Warm Light-Mode Toggle option (Parchment Cream #FDFBF7 & Soft Sand #F3EEE7). High contrast, touch-optimized tablet & desktop interface.",
+  "typography": {
+    "font_family_heading": "Plus Jakarta Sans, sans-serif",
+    "font_family_body": "Plus Jakarta Sans, sans-serif",
+    "font_family_mono": "JetBrains Mono, monospace",
+    "heading_h1": "text-3xl md:text-4xl font-bold tracking-tight text-amber-500",
+    "heading_h2": "text-2xl md:text-3xl font-semibold tracking-tight",
+    "heading_h3": "text-lg md:text-xl font-medium",
+    "body_text": "text-sm md:text-base leading-relaxed text-zinc-300 dark:text-zinc-300 light:text-zinc-700",
+    "price_text": "font-mono font-semibold tracking-tight text-emerald-400 dark:text-emerald-400 light:text-emerald-600"
+  },
+  "colors": {
+    "background_dark": "#120F0D",
+    "surface_dark": "#1C1815",
+    "surface_card_dark": "#25201C",
+    "border_dark": "#38302A",
+    "primary": "#F59E0B",
+    "primary_hover": "#D97706",
+    "secondary": "#10B981",
+    "accent_coral": "#EF4444",
+    "accent_indigo": "#6366F1",
+    "text_primary_dark": "#F4F4F5",
+    "text_secondary_dark": "#A1A1AA",
+    "status": {
+      "available": "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+      "occupied": "bg-amber-500/15 text-amber-400 border-amber-500/30",
+      "reserved": "bg-indigo-500/15 text-indigo-400 border-indigo-500/30",
+      "cleaning": "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
+      "low_stock": "bg-rose-500/15 text-rose-400 border-rose-500/30 animate-pulse"
+    }
+  },
+  "database_schema_and_architecture": {
+    "collections": [
+      {
+        "name": "Products",
+        "description": "Master produk makanan & minuman",
+        "fields": {
+          "id": "string (unique)",
+          "name": "string",
+          "category": "string (Makanan Utama / Minuman / Makanan Penutup / Snack / Add-on)",
+          "price": "number (Harga Jual dalam Rp)",
+          "type": "string (dine_in / takeaway / both)",
+          "image": "string (URL foto produk)",
+          "inventoryId": "string (optional reference ke bahan utama)",
+          "hpp": "number (Harga Pokok Penjualan / Cost of Goods Sold - dihitung otomatis dari Recipes atau manual)"
+        }
+      },
+      {
+        "name": "Tables",
+        "description": "Daftar meja dan status pesanan di area restoran",
+        "fields": {
+          "id": "string (T-01, T-02, dll)",
+          "name": "string (Meja 1, VIP 2, Bar 3)",
+          "area": "string (Indoor Utama / Terrace Outdoor / VIP Room / Rooftop)",
+          "status": "string (available / occupied / reserved)",
+          "orderData": "object / json (detail pesanan aktif jika occupied: items, customerName, waiterName, total, startTime)"
+        }
+      },
+      {
+        "name": "Transactions",
+        "description": "Riwayat transaksi pembayaran dan cetak struk",
+        "fields": {
+          "id": "string (TRX-YYYYMMDD-XXX)",
+          "date": "string (ISO Timestamp)",
+          "type": "string (Dine In / Takeaway)",
+          "method": "string (Cash / QRIS / Card / Debit)",
+          "tableId": "string (optional reference ke Tables)",
+          "customerId": "string (optional reference ke Customers)",
+          "total": "number (Total bayar Rp)",
+          "items_json": "array of objects [{productId, productName, qty, price, hpp, notes}]",
+          "userId": "string (Kasir ID)",
+          "cashGiven": "number (Uang dibayar)",
+          "waiterName": "string (Nama Waiter / Pelayan)"
+        }
+      },
+      {
+        "name": "Customers",
+        "description": "Master pelanggan dan program loyalitas",
+        "fields": {
+          "id": "string (CUST-001)",
+          "name": "string",
+          "wa": "string (Nomor WhatsApp)",
+          "email": "string",
+          "points": "number (Poin reward)",
+          "visits": "number (Jumlah kedatangan)",
+          "total_spent": "number (Total pengeluaran Rp)"
+        }
+      },
+      {
+        "name": "Inventory",
+        "description": "Stok bahan baku & perlengkapan dapur",
+        "fields": {
+          "id": "string (INV-001)",
+          "name": "string (Biji Kopi Arabika, Susu UHT, Tepung, Daging Sapi, Sugar Syrup)",
+          "type": "string (Ingredient / Packaging / Consumable)",
+          "stock": "number (Jumlah kuantitas)",
+          "unit": "number or string (kg / liter / pcs / gram / ml)",
+          "cost_per_unit": "number (Biaya per unit Rp)"
+        }
+      },
+      {
+        "name": "Recipes",
+        "description": "Resep racikan produk dari bahan baku (digunakan untuk pengurangan stok otomatis & hitung HPP)",
+        "fields": {
+          "productId": "string (Reference ke Products)",
+          "inventoryId": "string (Reference ke Inventory)",
+          "qty_needed": "number (Jumlah bahan yang digunakan per 1 porsi produk)"
+        }
+      },
+      {
+        "name": "Purchases",
+        "description": "Pembelian stok / restock dari supplier (otomatis menambah stok Inventory)",
+        "fields": {
+          "id": "string (PO-YYYYMMDD-XXX)",
+          "date": "string (ISO Timestamp)",
+          "supplier": "string (Nama Supplier / Toko)",
+          "items_json": "array of objects [{inventoryId, name, qty, cost_per_unit, subtotal}]",
+          "total_cost": "number (Total Pengeluaran Restock Rp)",
+          "userId": "string (Admin / Manager ID)"
+        }
+      },
+      {
+        "name": "Expenses",
+        "description": "Beban operasional restoran (Sewa, Listrik, Gaji, Operasional Dapur)",
+        "fields": {
+          "id": "string (EXP-001)",
+          "date": "string (ISO Timestamp)",
+          "category": "string (Operasional / Gaji / Utility / Maintenance / Marketing)",
+          "description": "string",
+          "amount": "number (Jumlah beban Rp)",
+          "userId": "string"
+        }
+      },
+      {
+        "name": "Users",
+        "description": "Staf restoran dengan otentikasi PIN & hak akses",
+        "fields": {
+          "id": "string (USR-01)",
+          "name": "string",
+          "pin": "string (4-6 digit angka)",
+          "role": "string (admin / kasir / waiter)"
+        }
+      },
+      {
+        "name": "OpenBills",
+        "description": "Pesanan gantung / Simpan Struk Sementara sebelum bayar akhir",
+        "fields": {
+          "id": "string (BILL-001)",
+          "timestamp": "string (ISO Timestamp)",
+          "type": "string (Dine In / Takeaway)",
+          "customerName": "string",
+          "total": "number",
+          "items_json": "array of objects [{productId, productName, qty, price, notes}]",
+          "userId": "string (Kasir ID)",
+          "waiterName": "string"
+        }
+      }
+    ],
+    "business_logic_rules": {
+      "stock_decrement": "Saat Transaksi diselesaikan (Status Paid / Selesai), sistem secara otomatis melakukan iterasi resep (Recipes) yang terikat pada setiap item produk yang dibeli, dan mengurangi `stock` pada `Inventory` sejumlah `qty_needed * item.qty`.",
+      "stock_increment": "Saat Pembelian Baru (Purchases) dibuat, sistem secara otomatis menambah `stock` pada `Inventory` yang dituju sejumlah `qty` item yang dibeli.",
+      "hpp_auto_calc": "HPP (Harga Pokok Penjualan) untuk suatu produk dapat dihitung otomatis sebagai SUM(Recipes.qty_needed * Inventory.cost_per_unit).",
+      "loyalty_points": "Setiap transaksi berhasil memperbarui `total_spent` & `visits` pada Customer yang dipilih, serta menambahkan `points` (+1 poin per kelipatan Rp 10.000).",
+      "roles_permissions": {
+        "admin": "Akses penuh ke semua halaman (Kasir, Meja, Stok, Pembelian, Pengeluaran, Pelanggan, Laporan Laba Rugi, Manajemen User PIN, dan Visualisasi Skema Database ERD).",
+        "kasir": "Akses ke Kasir POS, Meja, Open Bills, Riwayat Transaksi, dan Pelanggan.",
+        "waiter": "Akses ke Denah Meja & Pembuatan Order / Open Bill."
+      }
+    }
+  },
+  "layout_structure": {
+    "header_nav": "Sticky glassmorphism header `#1C1815/90 backdrop-blur-md border-b border-[#38302A]` dengan status shift kasir, nama user aktif, role badge, tombol switch role/logout PIN, indikator meja terisi, dan jam digital real-time.",
+    "sidebar": "Navigation menu vertikal kiri (Desktop) & Bottom bar (Tablet/Mobile) untuk perpindahan cepat antara: 1. POS Kasir, 2. Floor Meja, 3. Open Bills, 4. Produk & Resep (HPP), 5. Stok Bahan (Inventory), 6. Pembelian (Purchases), 7. Pengeluaran (Expenses), 8. Pelanggan (Customers), 9. Transaksi, 10. Laporan Laba/Rugi, 11. Kelola User, 12. ERD Database Schema.",
+    "pos_cashier_view": "Split layout: Kiri (65% width) Grid Produk per Kategori & Search bar; Kanan (35% width) Basket Order / Ringkasan Keranjang dengan Pilihan Tipe Order, Pilih Meja, Pilih Pelanggan, Input Diskon, Pilihan Metode Bayar, Modul Kembalian, dan Tombol Simpan Open Bill / Bayar Sekarang."
+  },
+  "visual_enhancers": {
+    "card_styles": "Rounded 16px (`rounded-2xl`), border 1px subtle `border-[#38302A]`, background `#1C1815` dengan hover effect transform scale 1.01 & ring accent amber.",
+    "bento_grid": "Grid responsif untuk dashboard laporan (4 kolom) & POS produk (grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4).",
+    "table_indicators": "Meja interaktif dengan badge warna: Hijau (Tersedia), Amber (Terisi), Ungu (Reserved). Klik meja membuka popover detail pesanan aktif atau opsi buat order baru."
+  },
+  "image_urls": {
+    "food_pastry_coffee": [
+      "https://images.unsplash.com/photo-1749680176532-19312597aa00?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHw0fHxnb3VybWV0JTIwZm9vZCUyMGRpc2glMjByZXN0YXVyYW50JTIwY29mZmVlJTIwbGF0dGUlMjBwYXN0cnl8ZW58MHx8fHwxNzkyMDg4Njk2fDA&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1627024452118-b0309954e946?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHwyfHxnb3VybWV0JTIwZm9vZCUyMGRpc2glMjByZXN0YXVyYW50JTIwY29mZmVlJTIwbGF0dGUlMjBwYXN0cnl8ZW58MHx8fHwxNzkyMDg4Njk2fDA&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1658728942322-1abec347551a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHwzfHxnb3VybWV0JTIwZm9vZCUyMGRpc2glMjByZXN0YXVyYW50JTIwY29mZmVlJTIwbGF0dGUlMjBwYXN0cnl8ZW58MHx8fHwxNzkyMDg4Njk2fDA&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1568046562322-0bbc869368ba?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHwxfHxnb3VybWV0JTIwZm9vZCUyMGRpc2glMjByZXN0YXVyYW50JTIwY29mZmVlJTIwbGF0dGUlMjBwYXN0cnl8ZW58MHx8fHwxNzkyMDg4Njk2fDA&ixlib=rb-4.1.0&q=85"
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Gunakan komponen Shadcn UI yang ada di `/src/components/ui/` dengan styling kustom Tailwind.",
+    "Semua elemen interaktif (tombol, input, filter, tab, kartu meja, item cart) WAJIB diberi atribut `data-testid` yang deskriptif.",
+    "Sediakan data mockup default yang realistis untuk 10 koleksi/tabel database dalam format LocalStorage agar dapat langsung diuji secara dinamis (tambah, edit, hapus, transaksi bayar, pengeluaran, restock).",
+    "Implementasikan visualisasi skema database / ERD interaktif pada menu khusus yang menampilkan 10 tabel beserta relasi primary/foreign key.",
+    "Format semua nilai uang menggunakan standar Indonesia IDR: `new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val)`."
+  ]
+}
