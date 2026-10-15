@@ -65,7 +65,7 @@ export const PayDialog = ({ open, onOpenChange, total, onPay, busy }) => {
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Kembalian</span>
-              <span data-testid="pay-change" className={`font-mono font-semibold ${cashNum >= total ? "text-emerald-400" : "text-destructive"}`}>
+              <span data-testid="pay-change" className={`font-mono font-semibold ${cashNum >= total ? "text-emerald-600" : "text-destructive"}`}>
                 {cashNum >= total ? rp(cashNum - total) : "Uang kurang"}
               </span>
             </div>

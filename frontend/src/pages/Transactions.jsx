@@ -6,7 +6,7 @@ import { ReceiptDialog } from "@/components/ReceiptDialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const DateInput = ({ value, onChange, testid }) => (
-  <input data-testid={testid} type="date" value={value} onChange={(e) => onChange(e.target.value)} className="h-10 rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-primary [color-scheme:dark]" />
+  <input data-testid={testid} type="date" value={value} onChange={(e) => onChange(e.target.value)} className="h-10 rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-primary" />
 );
 
 export default function Transactions() {

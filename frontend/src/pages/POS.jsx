@@ -101,7 +101,7 @@ export default function POS() {
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
+    <div className="grid gap-4 md:grid-cols-[1fr_300px] lg:grid-cols-[1fr_340px] xl:grid-cols-[1fr_380px]">
       <ProductGrid products={products} onAdd={add} />
       <CartPanel
         order={order} setOrder={setOrder} tables={tables} customers={customers} cart={cart} setCart={setCart}

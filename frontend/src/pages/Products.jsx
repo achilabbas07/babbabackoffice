@@ -79,7 +79,7 @@ export default function Products() {
                   <TableCell className="text-xs text-muted-foreground">{rc ? `Resep (${rc} bahan)` : p.inventoryId ? `Barang jadi: ${invName(p.inventoryId) || p.inventoryId}` : "Manual"}</TableCell>
                   <TableCell className="text-right font-mono">{rp(p.price)}</TableCell>
                   <TableCell data-testid={`product-hpp-${p.id}`} className="text-right font-mono text-muted-foreground">{rp(p.hpp)}</TableCell>
-                  <TableCell className={`text-right font-mono ${margin >= 50 ? "text-emerald-400" : "text-amber-400"}`}>{margin.toFixed(0)}%</TableCell>
+                  <TableCell className={`text-right font-mono ${margin >= 50 ? "text-emerald-600" : "text-amber-600"}`}>{margin.toFixed(0)}%</TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
                       <button data-testid={`product-recipe-${p.id}`} onClick={() => setRecipeFor(p)} className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm text-primary hover:bg-primary/10"><ChefHat className="h-4 w-4" />Resep</button>

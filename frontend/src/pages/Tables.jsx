@@ -10,9 +10,9 @@ import { ConfirmDelete } from "@/components/ConfirmDelete";
 import { Button } from "@/components/ui/button";
 
 const STATUS = {
-  available: { label: "Tersedia", cls: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" },
-  occupied: { label: "Terisi", cls: "border-amber-500/40 bg-amber-500/10 text-amber-400" },
-  reserved: { label: "Reservasi", cls: "border-indigo-500/30 bg-indigo-500/10 text-indigo-300" },
+  available: { label: "Tersedia", cls: "border-emerald-300 bg-emerald-50 text-emerald-700" },
+  occupied: { label: "Terisi", cls: "border-amber-300 bg-amber-50 text-amber-700" },
+  reserved: { label: "Reservasi", cls: "border-indigo-300 bg-indigo-50 text-indigo-700" },
 };
 const FIELDS = [
   { name: "name", label: "Nama meja", required: true },

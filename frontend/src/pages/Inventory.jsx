@@ -18,7 +18,7 @@ const FIELDS = [
   { name: "cost_per_unit", label: "Biaya per satuan (Rp)", type: "number", required: true },
 ];
 
-const status = (i) => (i.stock <= 0 ? ["Habis", "text-destructive bg-destructive/15"] : i.stock <= i.min_stock ? ["Menipis", "text-rose-300 bg-rose-500/15 animate-pulse"] : ["Aman", "text-emerald-400 bg-emerald-500/10"]);
+const status = (i) => (i.stock <= 0 ? ["Habis", "text-destructive bg-destructive/15"] : i.stock <= i.min_stock ? ["Menipis", "text-rose-700 bg-rose-100 animate-pulse"] : ["Aman", "text-emerald-700 bg-emerald-100"]);
 
 export default function Inventory() {
   const [items, setItems] = useState([]);
@@ -48,7 +48,7 @@ export default function Inventory() {
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <StatCard label="Jumlah bahan" value={items.length} testid="inventory-count" />
         <StatCard label="Nilai persediaan" value={rp(value)} testid="inventory-value" />
-        <StatCard label="Perlu restock" value={low} tone={low ? "text-rose-400" : ""} testid="inventory-low-count" />
+        <StatCard label="Perlu restock" value={low} tone={low ? "text-rose-600" : ""} testid="inventory-low-count" />
       </div>
       <div className="overflow-x-auto rounded-2xl border border-border bg-card">
         <Table>

@@ -16,9 +16,9 @@ const FieldRow = ({ f, onHover }) => {
   return (
     <div className="flex items-center justify-between gap-2 px-4 py-1.5 text-xs" onMouseEnter={() => ref && onHover(ref)}>
       <span className="flex min-w-0 items-center gap-1.5">
-        {isPk ? <KeyRound className="h-3 w-3 shrink-0 text-primary" /> : isFk ? <Link2 className="h-3 w-3 shrink-0 text-sky-400" /> : <span className="w-3" />}
+        {isPk ? <KeyRound className="h-3 w-3 shrink-0 text-primary" /> : isFk ? <Link2 className="h-3 w-3 shrink-0 text-sky-600" /> : <span className="w-3" />}
         <span className={`truncate font-mono ${isPk ? "text-primary" : ""}`}>{name}</span>
-        {tag?.includes("+") && <span className="rounded bg-emerald-500/15 px-1 text-[9px] text-emerald-400">tambahan</span>}
+        {tag?.includes("+") && <span className="rounded bg-emerald-100 px-1 text-[9px] text-emerald-700">tambahan</span>}
       </span>
       <span className="shrink-0 font-mono text-muted-foreground">{ref ? `→ ${NAMES[ref]}` : type}</span>
     </div>
@@ -40,7 +40,7 @@ export default function Schema() {
       <PageHeader title="Skema Database" subtitle="10 koleksi MongoDB beserta relasi PK/FK. Arahkan kursor ke tabel untuk menyorot relasinya." />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" onMouseLeave={() => setFocus(null)}>
         {SCHEMA.map((s) => {
-          const state = !focus ? "" : s.key === focus ? "border-primary ring-1 ring-primary" : rel.has(s.key) ? "border-sky-400/60" : "opacity-35";
+          const state = !focus ? "" : s.key === focus ? "border-primary ring-1 ring-primary" : rel.has(s.key) ? "border-sky-500/70" : "opacity-35";
           return (
             <div key={s.key} data-testid={`schema-table-${s.key}`} onMouseEnter={() => setFocus(s.key)}
               className={`overflow-hidden rounded-2xl border border-border bg-card transition-[opacity,border-color] duration-200 ${state}`}>
@@ -63,7 +63,7 @@ export default function Schema() {
           {RELATIONS.map(([from, to, card, rule]) => (
             <div key={from} data-testid={`schema-relation-${from}`} className="grid gap-1 py-2.5 text-sm md:grid-cols-[1.4fr_1fr_70px_2fr] md:items-center">
               <span className="font-mono text-xs">{from}</span>
-              <span className="font-mono text-xs text-sky-400">→ {to}</span>
+              <span className="font-mono text-xs text-sky-600">→ {to}</span>
               <span className="font-mono text-xs text-primary">{card}</span>
               <span className="text-xs text-muted-foreground">{rule}</span>
             </div>

@@ -47,15 +47,15 @@ export default function Reports() {
           <button key={label} data-testid={`report-preset-${n}`} onClick={() => setRange({ from: daysAgoStr(n), to: todayStr() })}
             className={`h-10 rounded-lg px-3 text-sm ${range.from === daysAgoStr(n) && range.to === todayStr() ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground"}`}>{label}</button>
         ))}
-        <input data-testid="report-from-date" type="date" value={range.from} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} className="h-10 rounded-lg border border-border bg-card px-3 text-sm [color-scheme:dark]" />
-        <input data-testid="report-to-date" type="date" value={range.to} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} className="h-10 rounded-lg border border-border bg-card px-3 text-sm [color-scheme:dark]" />
+        <input data-testid="report-from-date" type="date" value={range.from} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} className="h-10 rounded-lg border border-border bg-card px-3 text-sm" />
+        <input data-testid="report-to-date" type="date" value={range.to} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} className="h-10 rounded-lg border border-border bg-card px-3 text-sm" />
       </PageHeader>
       {data && (
         <div className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard label="Pendapatan" value={rp(data.revenue)} hint={`${data.transaction_count} transaksi · rata-rata ${rp(data.avg_ticket)}`} testid="report-revenue" />
             <StatCard label="HPP" value={rp(data.cogs)} testid="report-cogs" />
-            <StatCard label="Laba kotor" value={rp(data.gross_profit)} tone="text-emerald-400" hint="Pendapatan − HPP" testid="report-gross-profit" />
+            <StatCard label="Laba kotor" value={rp(data.gross_profit)} tone="text-emerald-600" hint="Pendapatan − HPP" testid="report-gross-profit" />
             <StatCard label="Laba bersih" value={rp(data.net_profit)} tone={data.net_profit >= 0 ? "text-primary" : "text-destructive"} hint={`Setelah pengeluaran ${rp(data.expenses)}`} testid="report-net-profit" />
           </div>
           <Panel title="Penjualan harian">
@@ -66,7 +66,7 @@ export default function Reports() {
                   <XAxis dataKey="date" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} tickFormatter={(d) => d.slice(5)} />
                   <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
                   <Tooltip formatter={(v) => rp(v)} contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 12 }} cursor={{ fill: "hsl(var(--secondary))" }} />
-                  <Bar dataKey="revenue" name="Pendapatan" fill="#F59E0B" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="revenue" name="Pendapatan" fill="#2563EB" radius={[6, 6, 0, 0]} />
                   <Bar dataKey="profit" name="Laba kotor" fill="#10B981" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -82,7 +82,7 @@ export default function Reports() {
                     <span className="flex-1">{p.name}</span>
                     <span className="font-mono text-muted-foreground">{p.qty}×</span>
                     <span className="w-28 text-right font-mono">{rp(p.revenue)}</span>
-                    <span className="w-28 text-right font-mono text-emerald-400">{rp(p.profit)}</span>
+                    <span className="w-28 text-right font-mono text-emerald-600">{rp(p.profit)}</span>
                   </div>
                 ))}
               </div>

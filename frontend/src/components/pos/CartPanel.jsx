@@ -92,16 +92,16 @@ export const CartPanel = ({ order, setOrder, tables, customers, cart, setCart, c
   const remove = (id) => setCart((c) => c.filter((i) => i.productId !== id));
 
   return (
-    <aside data-testid="cart-panel" className="flex flex-col rounded-2xl border border-border bg-card lg:sticky lg:top-24 lg:max-h-[calc(100vh-7.5rem)]">
-      <div className="flex items-center justify-between border-b border-border px-5 py-4">
+    <aside data-testid="cart-panel" className="flex flex-col rounded-2xl border border-border bg-card md:sticky md:top-[5.5rem] md:max-h-[calc(100vh-6.5rem)]">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div>
           <p className="font-semibold">Pesanan {order.billId && <span data-testid="cart-bill-id" className="font-mono text-primary">#{order.billId}</span>}</p>
           <p className="text-xs text-muted-foreground">{cart.length} menu</p>
         </div>
         {(cart.length > 0 || order.billId) && <button data-testid="cart-reset-button" onClick={onReset} className="text-xs text-muted-foreground hover:text-foreground">Pesanan baru</button>}
       </div>
-      <div className="border-b border-border px-5 py-4"><OrderOptions order={order} setOrder={setOrder} tables={tables} customers={customers} /></div>
-      <div className="min-h-[140px] flex-1 space-y-2 overflow-y-auto px-5 py-4">
+      <div className="border-b border-border px-4 py-3"><OrderOptions order={order} setOrder={setOrder} tables={tables} customers={customers} /></div>
+      <div className="min-h-[140px] flex-1 space-y-2 overflow-y-auto px-4 py-3">
         {cart.length === 0 ? (
           <div className="grid h-full place-items-center py-8 text-center text-sm text-muted-foreground">
             <div><ShoppingBag className="mx-auto mb-2 h-7 w-7" />Ketuk menu untuk menambahkan</div>
@@ -110,7 +110,7 @@ export const CartPanel = ({ order, setOrder, tables, customers, cart, setCart, c
           cart.map((i) => <CartLine key={i.productId} item={i} onQty={(d) => qty(i.productId, d)} onNotes={(v) => notes(i.productId, v)} onRemove={() => remove(i.productId)} />)
         )}
       </div>
-      <div className="space-y-3 border-t border-border px-5 py-4">
+      <div className="space-y-3 border-t border-border px-4 py-3">
         <div className="flex items-baseline justify-between">
           <span className="text-sm text-muted-foreground">Total</span>
           <span data-testid="cart-total" className="font-mono text-2xl font-bold text-primary">{rp(total)}</span>
