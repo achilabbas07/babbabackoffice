@@ -18,6 +18,7 @@ export default function POS() {
   const [products, setProducts] = useState([]);
   const [tables, setTables] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [waiters, setWaiters] = useState([]);
   const [order, setOrder] = useState(() => emptyOrder(user));
   const [cart, setCart] = useState([]);
   const [payOpen, setPayOpen] = useState(false);
@@ -26,10 +27,11 @@ export default function POS() {
 
   const loadRefs = useCallback(async () => {
     try {
-      const [p, t, c] = await Promise.all([api.get("/products"), api.get("/tables"), api.get("/customers")]);
+      const [p, t, c, w] = await Promise.all([api.get("/products"), api.get("/tables"), api.get("/customers"), api.get("/users/waiters")]);
       setProducts(p.data);
       setTables(t.data);
       setCustomers(c.data);
+      setWaiters(w.data);
     } catch (e) {
       toast.error(errMsg(e));
     }
@@ -110,7 +112,7 @@ export default function POS() {
     <div className="grid gap-4 md:grid-cols-[1fr_300px] lg:grid-cols-[1fr_340px] xl:grid-cols-[1fr_380px]">
       <ProductGrid products={products} onAdd={add} ojol={ojol} />
       <CartPanel
-        order={order} setOrder={setOrder} tables={tables} customers={customers} cart={cart} setCart={setCart} priceOf={priceOf} total={total}
+        order={order} setOrder={setOrder} tables={tables} customers={customers} waiters={waiters} cart={cart} setCart={setCart} priceOf={priceOf} total={total}
         canPay={user.role !== "waiter"} busy={busy} onSaveBill={saveBill} onPay={() => setPayOpen(true)} onReset={reset}
       />
       <PayDialog open={payOpen} onOpenChange={setPayOpen} total={total} onPay={pay} busy={busy} />

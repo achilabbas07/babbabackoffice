@@ -13,7 +13,8 @@ export const isDirectPay = (type) => ORDER_TYPES.some((t) => t.id === type && t.
 
 const inputCls = "h-9 min-w-0 rounded-lg border border-border bg-transparent px-3 text-sm outline-none focus:border-primary";
 
-const OrderOptions = ({ order, setOrder, tables, customers, canPay }) => {
+const OrderOptions = ({ order, setOrder, tables, customers, waiters, canPay }) => {
+  const waiterNames = [...new Set([...waiters.map((w) => w.name), order.waiterName].filter(Boolean))];
   const freeTables = tables.filter((t) => t.status !== "occupied" || t.orderData?.openBillId === order.billId);
   const set = (patch) => setOrder((o) => ({ ...o, ...patch }));
   const types = ORDER_TYPES.filter((t) => canPay || !t.direct);
@@ -58,7 +59,13 @@ const OrderOptions = ({ order, setOrder, tables, customers, canPay }) => {
       <div className="grid grid-cols-2 gap-2">
         <input data-testid="order-customer-name-input" value={order.customerName} onChange={(e) => set({ customerName: e.target.value })}
           placeholder={order.type === "Ojek Online" ? "Nama / No. order" : "Nama pemesan"} className={inputCls} />
-        <input data-testid="order-waiter-input" value={order.waiterName} onChange={(e) => set({ waiterName: e.target.value })} placeholder="Nama waiter" className={inputCls} />
+        <Select value={order.waiterName || "none"} onValueChange={(v) => set({ waiterName: v === "none" ? "" : v })}>
+          <SelectTrigger data-testid="order-waiter-select" className="h-9"><SelectValue placeholder="Pelayan" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Tanpa pelayan</SelectItem>
+            {waiterNames.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
     </div>
   );
@@ -94,7 +101,7 @@ const CartLine = ({ item, price, onQty, onNotes, onRemove }) => {
   );
 };
 
-export const CartPanel = ({ order, setOrder, tables, customers, cart, setCart, priceOf, total, canPay, busy, onSaveBill, onPay, onReset }) => {
+export const CartPanel = ({ order, setOrder, tables, customers, waiters, cart, setCart, priceOf, total, canPay, busy, onSaveBill, onPay, onReset }) => {
   const qty = (id, d) => setCart((c) => c.map((i) => (i.productId === id ? { ...i, qty: i.qty + d } : i)).filter((i) => i.qty > 0));
   const notes = (id, v) => setCart((c) => c.map((i) => (i.productId === id ? { ...i, notes: v } : i)));
   const remove = (id) => setCart((c) => c.filter((i) => i.productId !== id));
@@ -110,7 +117,7 @@ export const CartPanel = ({ order, setOrder, tables, customers, cart, setCart, p
         </p>
         {(cart.length > 0 || order.billId) && <button data-testid="cart-reset-button" onClick={onReset} className="text-xs text-muted-foreground hover:text-foreground">Pesanan baru</button>}
       </div>
-      <div className="border-b border-border px-4 py-2.5"><OrderOptions order={order} setOrder={setOrder} tables={tables} customers={customers} canPay={canPay} /></div>
+      <div className="border-b border-border px-4 py-2.5"><OrderOptions order={order} setOrder={setOrder} tables={tables} customers={customers} waiters={waiters} canPay={canPay} /></div>
       <div data-testid="cart-list" className="min-h-[312px] flex-1 space-y-1.5 overflow-y-auto px-3 py-2.5">
         {cart.length === 0 ? (
           <div className="grid h-full place-items-center text-center text-sm text-muted-foreground">

@@ -238,6 +238,11 @@ async def list_users(_: User = Depends(ADMIN)):
     return [User.from_mongo(d) for d in await db.users.find().sort("_id").to_list(None)]
 
 
+@api.get("/users/waiters")
+async def list_waiters(_: User = Depends(ANY)):
+    return [{"id": d["_id"], "name": d["name"]} async for d in db.users.find({"role": "waiter"}).sort("name", 1)]
+
+
 @api.post("/users")
 async def create_user(body: UserIn, _: User = Depends(ADMIN)):
     if not body.pin:

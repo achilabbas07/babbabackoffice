@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Coffee, LogOut } from "lucide-react";
+import { Coffee, LogOut, Maximize, Minimize } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { NAV } from "@/lib/nav";
 import { ROLE_LABEL } from "@/lib/api";
@@ -15,6 +15,27 @@ const Clock = () => {
     <span data-testid="header-clock" className="font-mono text-sm text-muted-foreground tabular-nums">
       {now.toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" })} · {now.toLocaleTimeString("id-ID")}
     </span>
+  );
+};
+
+const FullscreenButton = () => {
+  const [isFull, setIsFull] = useState(!!document.fullscreenElement);
+  useEffect(() => {
+    const onChange = () => setIsFull(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+  const toggle = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {});
+  const Icon = isFull ? Minimize : Maximize;
+  return (
+    <button
+      data-testid="fullscreen-toggle-button"
+      onClick={toggle}
+      title={isFull ? "Keluar layar penuh" : "Layar penuh"}
+      className="grid h-10 w-10 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+    >
+      <Icon className="h-4 w-4" />
+    </button>
   );
 };
 
@@ -62,6 +83,7 @@ export default function Layout() {
             <div className="md:hidden"><Brand /></div>
             <div className="hidden sm:block"><Clock /></div>
             <div className="flex items-center gap-3">
+              <FullscreenButton />
               <div className="text-right leading-tight">
                 <p data-testid="header-user-name" className="text-sm font-semibold">{user.name}</p>
                 <p data-testid="header-user-role" className="text-[11px] uppercase tracking-widest text-primary">{ROLE_LABEL[user.role]}</p>
