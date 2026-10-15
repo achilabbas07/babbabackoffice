@@ -58,6 +58,30 @@ class RecipeLine(BaseModel):
 class TableIn(BaseModel):
     name: str = Field(min_length=1)
     area: str = Field(min_length=1)
+    kind: Literal["table", "fixture"] = "table"
+
+
+class TableLayoutItem(BaseModel):
+    id: str
+    x: int = Field(ge=0, le=60)
+    y: int = Field(ge=0, le=60)
+
+
+class PinIn(BaseModel):
+    pin: str = Field(pattern=r"^\d{4,6}$")
+
+
+class MergeIn(BaseModel):
+    sourceBillId: str
+
+
+class MoveIn(BaseModel):
+    tableId: str
+
+
+class VoidIn(BaseModel):
+    adminPin: Optional[str] = None
+    reason: str = ""
 
 
 class TableStatusIn(BaseModel):
@@ -98,6 +122,7 @@ class TransactionIn(OpenBillIn):
     method: Literal["Cash", "QRIS", "Card", "Debit"]
     cashGiven: float = Field(0, ge=0)
     openBillId: Optional[str] = None
+    partial: bool = False
 
 
 class PurchaseItemIn(BaseModel):
@@ -181,6 +206,8 @@ async def consume_stock(needs: dict):
 
 async def occupy_table(table_id: str, bill: OpenBill):
     t = await get_or_404("tables", table_id, "Meja")
+    if t.get("kind") == "fixture":
+        raise HTTPException(400, f"{t['name']} bukan meja")
     od = t.get("orderData") or {}
     if t["status"] == "occupied" and od.get("openBillId") != bill.id:
         raise HTTPException(409, f"{t['name']} sedang terisi")
@@ -193,6 +220,32 @@ async def occupy_table(table_id: str, bill: OpenBill):
 async def free_table(table_id: Optional[str]):
     if table_id:
         await db.tables.update_one({"_id": table_id}, {"$set": {"status": "available", "orderData": None}})
+
+
+async def mark_paid(table_id: str, trx: Transaction):
+    order_data = {"lastTransactionId": trx.id, "total": trx.total, "paidAt": trx.date}
+    await db.tables.update_one({"_id": table_id}, {"$set": {"status": "paid", "orderData": order_data}})
+
+
+def client_ident(request: Request) -> str:
+    return (request.headers.get("x-forwarded-for") or (request.client.host if request.client else "")).split(",")[0].strip()
+
+
+async def check_pin(request: Request, pin: str, role: Optional[str] = None) -> dict:
+    ident = client_ident(request)
+    now = datetime.now(timezone.utc)
+    att = await db.login_attempts.find_one({"identifier": ident}) or {}
+    locked = att.get("locked_until")
+    if locked and datetime.fromisoformat(locked) > now:
+        raise HTTPException(429, "Terlalu banyak percobaan PIN salah. Coba lagi dalam 15 menit.")
+    async for doc in db.users.find({"role": role} if role else {}):
+        if verify_pin(pin, doc["pin"]):
+            await db.login_attempts.delete_one({"identifier": ident})
+            return doc
+    count = 1 if locked else att.get("count", 0) + 1
+    update = {"count": count, "locked_until": (now + timedelta(minutes=15)).isoformat() if count >= 5 else None}
+    await db.login_attempts.update_one({"identifier": ident}, {"$set": update}, upsert=True)
+    raise HTTPException(401, "PIN admin salah" if role else "PIN salah")
 
 
 async def pin_in_use(pin: str, exclude: Optional[str] = None) -> bool:
@@ -210,21 +263,14 @@ async def root():
 
 @api.post("/auth/login")
 async def login(body: LoginIn, request: Request):
-    ident = (request.headers.get("x-forwarded-for") or (request.client.host if request.client else "")).split(",")[0].strip()
-    now = datetime.now(timezone.utc)
-    att = await db.login_attempts.find_one({"identifier": ident}) or {}
-    locked = att.get("locked_until")
-    if locked and datetime.fromisoformat(locked) > now:
-        raise HTTPException(429, "Terlalu banyak percobaan PIN salah. Coba lagi dalam 15 menit.")
-    async for doc in db.users.find({}):
-        if verify_pin(body.pin, doc["pin"]):
-            await db.login_attempts.delete_one({"identifier": ident})
-            user = User.from_mongo(doc)
-            return {"token": create_token(user.id), "user": user}
-    count = 1 if locked else att.get("count", 0) + 1
-    update = {"count": count, "locked_until": (now + timedelta(minutes=15)).isoformat() if count >= 5 else None}
-    await db.login_attempts.update_one({"identifier": ident}, {"$set": update}, upsert=True)
-    raise HTTPException(401, "PIN salah")
+    user = User.from_mongo(await check_pin(request, body.pin))
+    return {"token": create_token(user.id), "user": user}
+
+
+@api.post("/auth/verify-admin")
+async def verify_admin(body: PinIn, request: Request, _: User = Depends(ANY)):
+    doc = await check_pin(request, body.pin, "admin")
+    return {"ok": True, "adminName": doc["name"]}
 
 
 @api.get("/auth/me")
@@ -390,6 +436,13 @@ async def create_table(body: TableIn, _: User = Depends(ADMIN)):
     return table
 
 
+@api.put("/tables/layout")
+async def save_table_layout(items: List[TableLayoutItem], _: User = Depends(ADMIN)):
+    for it in items:
+        await db.tables.update_one({"_id": it.id}, {"$set": {"x": it.x, "y": it.y}})
+    return {"ok": True, "updated": len(items)}
+
+
 @api.put("/tables/{tid}")
 async def update_table(tid: str, body: TableIn, _: User = Depends(ADMIN)):
     await get_or_404("tables", tid, "Meja")
@@ -489,12 +542,71 @@ async def update_open_bill(bid: str, body: OpenBillIn, user: User = Depends(ANY)
     return bill
 
 
-@api.delete("/open-bills/{bid}")
-async def delete_open_bill(bid: str, _: User = Depends(STAFF)):
+async def save_bill_items(bill: OpenBill, items: List[OrderItemIn]) -> OpenBill:
+    new_items, total = await build_items(items, bill.type)
+    updated = bill.model_copy(update={"items_json": new_items, "total": total})
+    await db.open_bills.replace_one({"_id": bill.id}, updated.to_mongo())
+    if updated.tableId:
+        await occupy_table(updated.tableId, updated)
+    return updated
+
+
+def remaining_items(bill_items: List[dict], paid: List[dict]) -> List[OrderItemIn]:
+    left, notes = defaultdict(int), {}
+    for i in bill_items:
+        left[i["productId"]] += i["qty"]
+        notes[i["productId"]] = notes.get(i["productId"]) or i.get("notes", "")
+    for p in paid:
+        if left.get(p["productId"], 0) < p["qty"]:
+            raise HTTPException(400, f"Jumlah {p['productName']} melebihi pesanan di bill")
+        left[p["productId"]] -= p["qty"]
+    return [OrderItemIn(productId=k, qty=v, notes=notes.get(k, "")) for k, v in left.items() if v > 0]
+
+
+@api.post("/open-bills/{bid}/void")
+async def void_open_bill(bid: str, body: VoidIn, request: Request, user: User = Depends(ANY)):
     bill = await get_or_404("open_bills", bid, "Open bill")
+    if user.role == "admin":
+        approver = user.name
+    else:
+        if not body.adminPin:
+            raise HTTPException(403, "Void membutuhkan otorisasi PIN admin")
+        approver = (await check_pin(request, body.adminPin, "admin"))["name"]
+    await db.void_logs.insert_one({
+        "_id": await next_id("VOID"), "billId": bid, "timestamp": now_iso(), "tableId": bill.get("tableId"),
+        "total": bill["total"], "items_json": bill["items_json"], "reason": body.reason,
+        "requestedBy": user.name, "authorizedBy": approver,
+    })
     await db.open_bills.delete_one({"_id": bid})
     await free_table(bill.get("tableId"))
-    return {"ok": True}
+    return {"ok": True, "authorizedBy": approver}
+
+
+@api.post("/open-bills/{bid}/merge")
+async def merge_open_bills(bid: str, body: MergeIn, _: User = Depends(ANY)):
+    if body.sourceBillId == bid:
+        raise HTTPException(400, "Tidak bisa menggabungkan bill dengan dirinya sendiri")
+    target = OpenBill.from_mongo(await get_or_404("open_bills", bid, "Open bill"))
+    source = OpenBill.from_mongo(await get_or_404("open_bills", body.sourceBillId, "Open bill"))
+    qty, notes = defaultdict(int), {}
+    for i in target.items_json + source.items_json:
+        qty[i["productId"]] += i["qty"]
+        notes[i["productId"]] = notes.get(i["productId"]) or i.get("notes", "")
+    await db.open_bills.delete_one({"_id": source.id})
+    await free_table(source.tableId)
+    return await save_bill_items(target, [OrderItemIn(productId=k, qty=v, notes=notes[k]) for k, v in qty.items()])
+
+
+@api.post("/open-bills/{bid}/move")
+async def move_open_bill(bid: str, body: MoveIn, _: User = Depends(ANY)):
+    bill = OpenBill.from_mongo(await get_or_404("open_bills", bid, "Open bill"))
+    if body.tableId == bill.tableId:
+        raise HTTPException(400, "Meja tujuan sama dengan meja saat ini")
+    moved = bill.model_copy(update={"tableId": body.tableId, "type": "Dine In"})
+    await occupy_table(body.tableId, moved)
+    await db.open_bills.update_one({"_id": bid}, {"$set": {"tableId": body.tableId, "type": "Dine In"}})
+    await free_table(bill.tableId)
+    return moved
 
 
 # ---------- Transactions ----------
@@ -522,6 +634,8 @@ async def get_transaction(tid: str, _: User = Depends(STAFF)):
 @api.post("/transactions")
 async def create_transaction(body: TransactionIn, user: User = Depends(STAFF)):
     bill = OpenBill.from_mongo(await get_or_404("open_bills", body.openBillId, "Open bill")) if body.openBillId else None
+    if body.partial and not bill:
+        raise HTTPException(400, "Pisah bill membutuhkan open bill")
     table_id = (body.tableId or (bill.tableId if bill else None)) if body.type == "Dine In" else None
     customer_id = body.customerId or (bill.customerId if bill else None)
     table = await get_or_404("tables", table_id, "Meja") if table_id else None
@@ -529,6 +643,7 @@ async def create_transaction(body: TransactionIn, user: User = Depends(STAFF)):
         raise HTTPException(409, f"{table['name']} sedang terisi oleh open bill lain")
     customer = await get_or_404("customers", customer_id, "Pelanggan") if customer_id else None
     items, total = await build_items(body.items, body.type)
+    remaining = remaining_items(bill.items_json, items) if body.partial else []
     if body.method == "Cash" and body.cashGiven < total:
         raise HTTPException(400, "Uang tunai kurang dari total")
     cash = body.cashGiven if body.method == "Cash" else total
@@ -546,10 +661,13 @@ async def create_transaction(body: TransactionIn, user: User = Depends(STAFF)):
     await db.transactions.insert_one(trx.to_mongo())
     if customer:
         await db.customers.update_one({"_id": customer_id}, {"$inc": {"visits": 1, "total_spent": total, "points": int(total // 10000)}})
-    if bill:
-        await db.open_bills.delete_one({"_id": bill.id})
-        await free_table(bill.tableId)
-    await free_table(table_id)
+    if remaining:
+        await save_bill_items(bill, remaining)
+    else:
+        if bill:
+            await db.open_bills.delete_one({"_id": bill.id})
+        for tid in {bill.tableId if bill else None, table_id} - {None}:
+            await mark_paid(tid, trx)
     return trx
 
 
@@ -644,7 +762,7 @@ async def report_summary(start: str, end: str, tz_offset: int = 0, _: User = Dep
 
 
 # ---------- Schema ----------
-COLLECTIONS = ["products", "tables", "transactions", "customers", "inventory", "recipes", "purchases", "expenses", "users", "open_bills"]
+COLLECTIONS = ["products", "tables", "transactions", "customers", "inventory", "recipes", "purchases", "expenses", "users", "open_bills", "void_logs"]
 
 
 @api.get("/schema")

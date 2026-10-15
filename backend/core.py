@@ -92,6 +92,9 @@ class Table(BaseDocument):
     area: str
     status: str = "available"
     orderData: Optional[dict] = None
+    kind: str = "table"
+    x: Optional[int] = None
+    y: Optional[int] = None
 
 
 class Customer(BaseDocument):

@@ -15,7 +15,7 @@ const inputCls = "h-9 min-w-0 rounded-lg border border-border bg-transparent px-
 
 const OrderOptions = ({ order, setOrder, tables, customers, waiters, canPay }) => {
   const waiterNames = [...new Set([...waiters.map((w) => w.name), order.waiterName].filter(Boolean))];
-  const freeTables = tables.filter((t) => t.status !== "occupied" || t.orderData?.openBillId === order.billId);
+  const freeTables = tables.filter((t) => t.kind !== "fixture" && (t.status !== "occupied" || t.orderData?.openBillId === order.billId));
   const set = (patch) => setOrder((o) => ({ ...o, ...patch }));
   const types = ORDER_TYPES.filter((t) => canPay || !t.direct);
   return (

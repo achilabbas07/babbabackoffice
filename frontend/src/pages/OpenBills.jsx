@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Ban } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api, errMsg, fmtDate, rp } from "@/lib/api";
 import { PageHeader, Empty } from "@/components/PageHeader";
-import { ConfirmDelete } from "@/components/ConfirmDelete";
+import { AdminPinDialog } from "@/components/tables/AdminPinDialog";
 
 export default function OpenBills() {
   const { user } = useAuth();
   const nav = useNavigate();
   const [bills, setBills] = useState([]);
   const [tables, setTables] = useState({});
+  const [voidBill, setVoidBill] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -58,15 +59,21 @@ export default function OpenBills() {
                 >
                   {user.role === "waiter" ? "Tambah item" : "Lanjutkan / Bayar"} <ArrowRight className="h-4 w-4" />
                 </button>
-                {user.role !== "waiter" && (
-                  <ConfirmDelete testid={`open-bill-void-${b.id}`} label="Batalkan" title={`Batalkan ${b.id}?`} description="Bill dihapus dan meja dikosongkan. Stok tidak berubah."
-                    onConfirm={async () => { await api.delete(`/open-bills/${b.id}`); toast.success("Open bill dibatalkan"); load(); }} />
-                )}
+                <button
+                  data-testid={`open-bill-void-${b.id}`}
+                  onClick={() => setVoidBill(b)}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-xl px-3 text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Ban className="h-4 w-4" />Void
+                </button>
               </div>
             </div>
           ))}
         </div>
       )}
+      <AdminPinDialog open={!!voidBill} onClose={() => setVoidBill(null)} testid="void-pin" needPin={user.role !== "admin"} withReason
+        title={`Void ${voidBill?.id || ""}`} description="Bill dihapus dan meja dikosongkan. Stok tidak berubah. Tercatat di log void."
+        onSubmit={async ({ pin, reason }) => { await api.post(`/open-bills/${voidBill.id}/void`, { adminPin: pin || null, reason }); toast.success("Bill di-void"); setVoidBill(null); load(); }} />
     </div>
   );
 }

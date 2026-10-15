@@ -10,8 +10,9 @@ export const SCHEMA = [
     ["id", "string", "PK"], ["name", "string"], ["type", "string"], ["stock", "number"], ["unit", "string"], ["cost_per_unit", "number"],
     ["min_stock", "number", "+"],
   ] },
-  { key: "tables", name: "Tables", desc: "Meja & status okupansi", fields: [
-    ["id", "string", "PK"], ["name", "string"], ["area", "string"], ["status", "string"], ["orderData.openBillId", "object", "FK", "open_bills"],
+  { key: "tables", name: "Tables", desc: "Meja, status okupansi & posisi denah", fields: [
+    ["id", "string", "PK"], ["name", "string"], ["area", "string"], ["status", "available|occupied|paid|reserved"], ["orderData.openBillId", "object", "FK", "open_bills"],
+    ["kind", "table|fixture", "+"], ["x, y", "int (grid)", "+"],
   ] },
   { key: "open_bills", name: "OpenBills", desc: "Pesanan tersimpan belum dibayar", fields: [
     ["id", "string", "PK"], ["timestamp", "string"], ["type", "string"], ["customerName", "string"], ["total", "number"],
@@ -36,6 +37,10 @@ export const SCHEMA = [
   { key: "users", name: "Users", desc: "Staf dengan login PIN", fields: [
     ["id", "string", "PK"], ["name", "string"], ["pin", "bcrypt hash"], ["role", "admin|kasir|waiter"],
   ] },
+  { key: "void_logs", name: "VoidLogs (tambahan)", desc: "Audit void open bill dengan otorisasi PIN admin", fields: [
+    ["id", "string", "PK"], ["billId", "string"], ["tableId", "string", "FK", "tables"], ["total", "number"], ["items_json", "array"],
+    ["reason", "string"], ["requestedBy", "string"], ["authorizedBy", "string"], ["timestamp", "string"],
+  ] },
 ];
 
 export const RELATIONS = [
@@ -47,11 +52,12 @@ export const RELATIONS = [
   ["open_bills.customerId", "customers.id", "N : 1", "Diteruskan ke transaksi saat dibayar"],
   ["open_bills.userId", "users.id", "N : 1", "Staf yang menginput pesanan"],
   ["open_bills.items_json[].productId", "products.id", "N : M", "Harga diambil dari master produk"],
-  ["transactions.tableId", "tables.id", "N : 1", "Meja dikosongkan saat lunas"],
+  ["transactions.tableId", "tables.id", "N : 1", "Meja berstatus 'paid' (Lunas) saat lunas, lalu dikosongkan manual"],
   ["transactions.customerId", "customers.id", "N : 1", "+visits, +total_spent, +1 poin / Rp10.000"],
   ["transactions.userId", "users.id", "N : 1", "Kasir yang memproses pembayaran"],
   ["transactions.items_json[].productId", "products.id", "N : M", "Stok bahan dikurangi via Recipes saat lunas"],
   ["purchases.items_json[].inventoryId", "inventory.id", "N : M", "Stok bertambah, cost_per_unit diperbarui, HPP dihitung ulang"],
   ["purchases.userId", "users.id", "N : 1", "Admin yang mencatat"],
   ["expenses.userId", "users.id", "N : 1", "Admin yang mencatat"],
+  ["void_logs.tableId", "tables.id", "N : 1", "Riwayat void per meja"],
 ];
