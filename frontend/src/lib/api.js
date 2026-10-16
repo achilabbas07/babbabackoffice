@@ -11,7 +11,9 @@ api.interceptors.request.use((cfg) => {
 api.interceptors.response.use(
   (r) => r,
   (err) => {
-    if (err.response?.status === 401 && !err.config?.url?.includes("/auth/login")) {
+    const url = err.config?.url || "";
+    const isPinCheck = url.includes("/auth/login") || url.includes("/auth/verify-admin") || url.endsWith("/void");
+    if (err.response?.status === 401 && !isPinCheck) {
       localStorage.removeItem("pos_token");
       window.dispatchEvent(new Event("pos-logout"));
     }

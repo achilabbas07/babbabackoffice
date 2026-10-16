@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Minus, Plus, X, Save, CreditCard, ShoppingBag, StickyNote } from "lucide-react";
+import { Minus, Plus, X, Save, CreditCard, ShoppingBag, StickyNote, Lock } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { rp } from "@/lib/api";
 
@@ -71,13 +71,16 @@ const OrderOptions = ({ order, setOrder, tables, customers, waiters, canPay }) =
   );
 };
 
-const CartLine = ({ item, price, onQty, onNotes, onRemove }) => {
+const CartLine = ({ item, price, locked, onQty, onNotes, onRemove }) => {
   const [editNote, setEditNote] = useState(false);
   return (
     <div data-testid={`cart-item-${item.productId}`} className="rounded-lg border border-border px-2.5 py-1.5">
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[13px] font-semibold leading-tight">{item.name}</p>
+          <p className="flex items-center gap-1 truncate text-[13px] font-semibold leading-tight">
+            {locked && <Lock data-testid={`cart-locked-${item.productId}`} className="h-3 w-3 shrink-0 text-amber-600" />}
+            <span className="truncate">{item.name}</span>
+          </p>
           <p className="truncate font-mono text-[11px] text-muted-foreground">{rp(price)}{item.notes && !editNote ? ` · ${item.notes}` : ""}</p>
         </div>
         <button data-testid={`cart-note-toggle-${item.productId}`} onClick={() => setEditNote((v) => !v)} title="Catatan"
@@ -101,10 +104,8 @@ const CartLine = ({ item, price, onQty, onNotes, onRemove }) => {
   );
 };
 
-export const CartPanel = ({ order, setOrder, tables, customers, waiters, cart, setCart, priceOf, total, canPay, busy, onSaveBill, onPay, onReset }) => {
-  const qty = (id, d) => setCart((c) => c.map((i) => (i.productId === id ? { ...i, qty: i.qty + d } : i)).filter((i) => i.qty > 0));
+export const CartPanel = ({ order, setOrder, tables, customers, waiters, cart, setCart, priceOf, total, canPay, busy, onSaveBill, onPay, onReset, onQty, onRemove, isLocked }) => {
   const notes = (id, v) => setCart((c) => c.map((i) => (i.productId === id ? { ...i, notes: v } : i)));
-  const remove = (id) => setCart((c) => c.filter((i) => i.productId !== id));
   const canBill = !isDirectPay(order.type);
   const count = cart.reduce((s, i) => s + i.qty, 0);
 
@@ -124,7 +125,7 @@ export const CartPanel = ({ order, setOrder, tables, customers, waiters, cart, s
             <div><ShoppingBag className="mx-auto mb-2 h-7 w-7" />Ketuk menu untuk menambahkan</div>
           </div>
         ) : (
-          cart.map((i) => <CartLine key={i.productId} item={i} price={priceOf(i)} onQty={(d) => qty(i.productId, d)} onNotes={(v) => notes(i.productId, v)} onRemove={() => remove(i.productId)} />)
+          cart.map((i) => <CartLine key={i.productId} item={i} price={priceOf(i)} locked={isLocked(i)} onQty={(d) => onQty(i.productId, d)} onNotes={(v) => notes(i.productId, v)} onRemove={() => onRemove(i.productId)} />)
         )}
       </div>
       <div className="space-y-2.5 border-t border-border px-4 py-3">

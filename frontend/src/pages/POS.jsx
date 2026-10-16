@@ -7,6 +7,7 @@ import { ProductGrid } from "@/components/pos/ProductGrid";
 import { CartPanel } from "@/components/pos/CartPanel";
 import { PayDialog } from "@/components/pos/PayDialog";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
+import { AdminPinDialog } from "@/components/tables/AdminPinDialog";
 
 const emptyOrder = (user) => ({
   billId: null, type: "Dine In", tableId: "none", customerId: "none", customerName: "", waiterName: user.role === "waiter" ? user.name : "",
@@ -24,6 +25,9 @@ export default function POS() {
   const [payOpen, setPayOpen] = useState(false);
   const [receipt, setReceipt] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState({});
+  const [authPin, setAuthPin] = useState(null);
+  const [pending, setPending] = useState(null);
 
   const loadRefs = useCallback(async () => {
     try {
@@ -48,6 +52,8 @@ export default function POS() {
       api.get(`/open-bills/${billId}`).then(({ data }) => {
         setOrder({ billId: data.id, type: data.type, tableId: data.tableId || "none", customerId: data.customerId || "none", customerName: data.customerName, waiterName: data.waiterName });
         setCart(data.items_json.map((i) => ({ productId: i.productId, name: i.productName, price: i.price, qty: i.qty, notes: i.notes || "" })));
+        setSaved(Object.fromEntries(data.items_json.map((i) => [i.productId, i.qty])));
+        setAuthPin(null);
       }).catch((e) => toast.error(errMsg(e)));
     } else if (tableId) {
       setOrder((o) => ({ ...o, type: "Dine In", tableId }));
@@ -61,8 +67,22 @@ export default function POS() {
   const reset = () => {
     setOrder(emptyOrder(user));
     setCart([]);
+    setSaved({});
+    setAuthPin(null);
     setParams({});
   };
+
+  const needsAuth = user.role !== "admin" && !!order.billId && !authPin;
+  const isLocked = (i) => needsAuth && (saved[i.productId] || 0) > 0 && i.qty <= saved[i.productId];
+  const guarded = (id, newQty, apply) => {
+    if (needsAuth && newQty < (saved[id] || 0)) setPending(() => apply);
+    else apply();
+  };
+  const changeQty = (id, d) => {
+    const item = cart.find((i) => i.productId === id);
+    guarded(id, item.qty + d, () => setCart((c) => c.map((i) => (i.productId === id ? { ...i, qty: i.qty + d } : i)).filter((i) => i.qty > 0)));
+  };
+  const removeItem = (id) => guarded(id, 0, () => setCart((c) => c.filter((i) => i.productId !== id)));
 
   const payload = () => ({
     type: order.type,
@@ -70,6 +90,7 @@ export default function POS() {
     customerId: order.customerId !== "none" ? order.customerId : null,
     customerName: order.customerName,
     waiterName: order.waiterName,
+    adminPin: authPin,
     items: cart.map(({ productId, qty, notes }) => ({ productId, qty, notes })),
   });
 
@@ -113,10 +134,13 @@ export default function POS() {
       <ProductGrid products={products} onAdd={add} ojol={ojol} />
       <CartPanel
         order={order} setOrder={setOrder} tables={tables} customers={customers} waiters={waiters} cart={cart} setCart={setCart} priceOf={priceOf} total={total}
-        canPay={user.role !== "waiter"} busy={busy} onSaveBill={saveBill} onPay={() => setPayOpen(true)} onReset={reset}
+        canPay={user.role !== "waiter"} busy={busy} onQty={changeQty} onRemove={removeItem} isLocked={isLocked} onSaveBill={saveBill} onPay={() => setPayOpen(true)} onReset={reset}
       />
       <PayDialog open={payOpen} onOpenChange={setPayOpen} total={total} onPay={pay} busy={busy} />
       <ReceiptDialog trx={receipt} onClose={() => setReceipt(null)} />
+      <AdminPinDialog open={!!pending} onClose={() => setPending(null)} testid="reduce-pin" needPin title="Otorisasi Admin"
+        description="Item ini sudah tersimpan di bill. Mengurangi atau menghapus item butuh PIN admin."
+        onSubmit={async ({ pin }) => { await api.post("/auth/verify-admin", { pin }); setAuthPin(pin); pending(); setPending(null); }} />
     </div>
   );
 }

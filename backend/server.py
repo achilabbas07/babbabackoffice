@@ -116,6 +116,7 @@ class OpenBillIn(BaseModel):
     customerName: str = ""
     waiterName: str = ""
     items: List[OrderItemIn] = Field(min_length=1)
+    adminPin: Optional[str] = None
 
 
 class TransactionIn(OpenBillIn):
@@ -529,9 +530,24 @@ async def create_open_bill(body: OpenBillIn, user: User = Depends(ANY)):
     return bill
 
 
+async def authorize_reduction(request: Request, user: User, bill: OpenBill, items: List[OrderItemIn], admin_pin: Optional[str]):
+    if user.role == "admin":
+        return
+    new_qty = defaultdict(int)
+    for i in items:
+        new_qty[i.productId] += i.qty
+    reduced = [o["productName"] for o in bill.items_json if new_qty.get(o["productId"], 0) < o["qty"]]
+    if not reduced:
+        return
+    if not admin_pin:
+        raise HTTPException(403, f"Mengurangi/menghapus item tersimpan ({', '.join(reduced)}) butuh otorisasi PIN admin")
+    await check_pin(request, admin_pin, "admin")
+
+
 @api.put("/open-bills/{bid}")
-async def update_open_bill(bid: str, body: OpenBillIn, user: User = Depends(ANY)):
+async def update_open_bill(bid: str, body: OpenBillIn, request: Request, user: User = Depends(ANY)):
     old = OpenBill.from_mongo(await get_or_404("open_bills", bid, "Open bill"))
+    await authorize_reduction(request, user, old, body.items, body.adminPin)
     bill = await compose_bill(body, user, bid, old.timestamp)
     bill.userId, bill.userName = old.userId, old.userName
     if bill.tableId:
@@ -632,10 +648,12 @@ async def get_transaction(tid: str, _: User = Depends(STAFF)):
 
 
 @api.post("/transactions")
-async def create_transaction(body: TransactionIn, user: User = Depends(STAFF)):
+async def create_transaction(body: TransactionIn, request: Request, user: User = Depends(STAFF)):
     bill = OpenBill.from_mongo(await get_or_404("open_bills", body.openBillId, "Open bill")) if body.openBillId else None
     if body.partial and not bill:
         raise HTTPException(400, "Pisah bill membutuhkan open bill")
+    if bill and not body.partial:
+        await authorize_reduction(request, user, bill, body.items, body.adminPin)
     table_id = (body.tableId or (bill.tableId if bill else None)) if body.type == "Dine In" else None
     customer_id = body.customerId or (bill.customerId if bill else None)
     table = await get_or_404("tables", table_id, "Meja") if table_id else None
