@@ -82,11 +82,9 @@ async def log_order_diff(old_items: List[dict], old_waiter: Tuple, new_items: Li
 async def progress_for(shift: dict) -> dict:
     targets = await db.sales_targets.find({"$or": [{"waiterId": None}, {"waiterId": shift["userId"]}]}).to_list(None)
     pids = list({pid for t in targets for pid in t["productIds"]})
-    agg = await db.order_logs.aggregate([
-        {"$match": {"shiftId": shift["_id"], "productId": {"$in": pids}}},
-        {"$group": {"_id": "$productId", "qty": {"$sum": "$qty"}}},
-    ]).to_list(None)
-    got = {a["_id"]: a["qty"] for a in agg}
+    got = defaultdict(int)
+    async for log in db.order_logs.find({"shiftId": shift["_id"], "productId": {"$in": pids}}):
+        got[log["productId"]] += log["qty"]
     items = []
     for t in targets:
         breakdown = [{"productId": pid, "productName": n, "qty": max(0, got.get(pid, 0))} for pid, n in zip(t["productIds"], t["productNames"])]

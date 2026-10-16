@@ -199,14 +199,6 @@ async def consume_stock(needs: dict):
             raise HTTPException(400, f"Bahan {inv_id} tidak ditemukan di inventory")
         if d["stock"] + 1e-9 < qty:
             raise HTTPException(400, f"Stok {d['name']} tidak cukup (butuh {qty:g} {d['unit']}, tersedia {d['stock']:g})")
-    done = []
-    for inv_id, qty in needs.items():
-        res = await db.inventory.update_one({"_id": inv_id, "stock": {"$gte": qty - 1e-9}}, {"$inc": {"stock": -qty}})
-        if res.modified_count == 0:
-            for did, dq in done:
-                await db.inventory.update_one({"_id": did}, {"$inc": {"stock": dq}})
-            raise HTTPException(409, "Stok berubah saat diproses, silakan coba lagi")
-        done.append((inv_id, qty))
 
 
 async def occupy_table(table_id: str, bill: OpenBill):
@@ -707,8 +699,6 @@ async def create_transaction(body: TransactionIn, request: Request, user: User =
     if not body.partial:
         old_items, old_w = (bill.items_json, (bill.waiterId, bill.waiterName)) if bill else ([], (None, ""))
         await log_order_diff(old_items, old_w, items, (wid, wname), "payment" if bill else "direct", trx.id)
-    if customer:
-        await db.customers.update_one({"_id": customer_id}, {"$inc": {"visits": 1, "total_spent": total, "points": int(total // 10000)}})
     if remaining:
         await save_bill_items(bill, remaining)
     else:
@@ -738,8 +728,6 @@ async def create_purchase(body: PurchaseIn, user: User = Depends(ADMIN)):
                         date=to_utc_iso(body.date) if body.date else now_iso(), supplier=body.supplier,
                         items_json=items, total_cost=sum(i["subtotal"] for i in items), userId=user.id, userName=user.name)
     await db.purchases.insert_one(purchase.to_mongo())
-    for it in items:
-        await db.inventory.update_one({"_id": it["inventoryId"]}, {"$inc": {"stock": it["qty"]}, "$set": {"cost_per_unit": it["cost_per_unit"]}})
     for inv_id in ids:
         await recalc_hpp_for_inventory(inv_id)
     return purchase
@@ -840,4 +828,4 @@ async def startup():
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    client.close()
+    await client.close()

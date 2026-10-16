@@ -11,12 +11,13 @@ from typing import Optional, List  # noqa: E402
 import bcrypt  # noqa: E402
 import jwt  # noqa: E402
 from fastapi import Depends, HTTPException, Request  # noqa: E402
-from motor.motor_asyncio import AsyncIOMotorClient  # noqa: E402
+from motor.motor_asyncio import AsyncIOMotorClient  # noqa: E402,F401
+from pgdb import PGDatabase  # noqa: E402
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field  # noqa: E402
 from pymongo import ReturnDocument  # noqa: E402
 
-client = AsyncIOMotorClient(os.environ["MONGO_URL"])
-db = client[os.environ["DB_NAME"]]
+db = PGDatabase(os.environ["DATABASE_URL"])
+client = db
 
 JWT_ALGORITHM = "HS256"
 TOKEN_HOURS = 12
