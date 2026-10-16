@@ -17,11 +17,13 @@ import Expenses from "@/pages/Expenses";
 import Reports from "@/pages/Reports";
 import Users from "@/pages/Users";
 import Schema from "@/pages/Schema";
+import Cash from "@/pages/Cash";
+import Shifts from "@/pages/Shifts";
 
 const PAGES = {
   "/pos": POS, "/tables": Tables, "/open-bills": OpenBills, "/transactions": Transactions, "/customers": Customers,
   "/products": Products, "/inventory": Inventory, "/purchases": Purchases, "/expenses": Expenses, "/reports": Reports,
-  "/users": Users, "/schema": Schema,
+  "/users": Users, "/schema": Schema, "/cash": Cash, "/shifts": Shifts,
 };
 
 const Protected = ({ roles, children }) => {

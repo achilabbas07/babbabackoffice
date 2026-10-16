@@ -4,6 +4,7 @@ import { Coffee, LogOut, Maximize, Minimize } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { NAV } from "@/lib/nav";
 import { ROLE_LABEL } from "@/lib/api";
+import { ShiftGate } from "@/components/ShiftGate";
 
 const Clock = () => {
   const [now, setNow] = useState(new Date());
@@ -103,7 +104,7 @@ export default function Layout() {
           </nav>
         </header>
         <main className="min-w-0 flex-1 px-3 py-4 sm:px-5 lg:px-6">
-          <Outlet />
+          <ShiftGate><Outlet /></ShiftGate>
         </main>
       </div>
     </div>

@@ -17,8 +17,8 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener("pos-logout", onLogout);
   }, []);
 
-  const login = async (pin) => {
-    const { data } = await api.post("/auth/login", { pin });
+  const login = async (userId, pin) => {
+    const { data } = await api.post("/auth/login", { userId, pin });
     localStorage.setItem("pos_token", data.token);
     setUser(data.user);
     return data.user;

@@ -22,7 +22,7 @@ export const SCHEMA = [
   { key: "transactions", name: "Transactions", desc: "Penjualan lunas (snapshot harga & HPP)", fields: [
     ["id", "string", "PK"], ["date", "string"], ["type", "Dine In|Takeaway|Walk In|Ojek Online"], ["method", "string"], ["tableId", "string", "FK", "tables"],
     ["customerId", "string", "FK+", "customers"], ["total", "number"], ["items_json[].productId", "array", "FK", "products"],
-    ["userId", "string", "FK", "users"], ["cashGiven", "number"], ["waiterName", "string"],
+    ["userId", "string", "FK", "users"], ["cashGiven", "number"], ["waiterName", "string"], ["shiftId", "string", "FK+", "shifts"],
   ] },
   { key: "customers", name: "Customers", desc: "Pelanggan & loyalitas", fields: [
     ["id", "string", "PK"], ["name", "string"], ["wa", "string"], ["email", "string"], ["points", "number"], ["visits", "number"], ["total_spent", "number"],
@@ -36,6 +36,13 @@ export const SCHEMA = [
   ] },
   { key: "users", name: "Users", desc: "Staf dengan login PIN", fields: [
     ["id", "string", "PK"], ["name", "string"], ["pin", "bcrypt hash"], ["role", "admin|kasir|waiter"],
+  ] },
+  { key: "shifts", name: "Shifts (tambahan)", desc: "Buka/tutup kasir, kas awal & selisih laci (blind close)", fields: [
+    ["id", "string", "PK"], ["userId", "string", "FK", "users"], ["openedAt", "string"], ["openingCash", "number"], ["status", "open|closed"],
+    ["cashSales", "number"], ["cashIn", "number"], ["cashOut", "number"], ["expectedCash", "number"], ["countedCash", "number"], ["difference", "number"],
+  ] },
+  { key: "cash_movements", name: "CashMovements (tambahan)", desc: "Kas masuk & kas keluar selama shift", fields: [
+    ["id", "string", "PK"], ["shiftId", "string", "FK", "shifts"], ["userId", "string", "FK", "users"], ["type", "in|out"], ["amount", "number"], ["note", "string"], ["timestamp", "string"],
   ] },
   { key: "void_logs", name: "VoidLogs (tambahan)", desc: "Audit void open bill dengan otorisasi PIN admin", fields: [
     ["id", "string", "PK"], ["billId", "string"], ["tableId", "string", "FK", "tables"], ["total", "number"], ["items_json", "array"],
@@ -60,4 +67,7 @@ export const RELATIONS = [
   ["purchases.userId", "users.id", "N : 1", "Admin yang mencatat"],
   ["expenses.userId", "users.id", "N : 1", "Admin yang mencatat"],
   ["void_logs.tableId", "tables.id", "N : 1", "Riwayat void per meja"],
+  ["transactions.shiftId", "shifts.id", "N : 1", "Penjualan tunai dihitung ke kas laci shift"],
+  ["shifts.userId", "users.id", "N : 1", "Kasir pemilik shift (1 shift terbuka per kasir)"],
+  ["cash_movements.shiftId", "shifts.id", "N : 1", "Kas masuk/keluar menambah/mengurangi uang seharusnya"],
 ];

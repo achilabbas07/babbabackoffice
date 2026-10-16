@@ -144,6 +144,7 @@ class Transaction(BaseDocument):
     tableName: str = ""
     customerName: str = ""
     userName: str = ""
+    shiftId: Optional[str] = None
 
 
 class Purchase(BaseDocument):

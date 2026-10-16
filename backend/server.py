@@ -4,6 +4,7 @@ from core import (  # noqa: I001
     to_utc_iso, verify_pin, get_current_user,
 )
 from seed import seed_all
+from shifts import router as shifts_router, get_open_shift
 
 import logging
 from collections import defaultdict
@@ -26,6 +27,7 @@ ANY = require_roles(*ALL_ROLES)
 
 # ---------- Input schemas ----------
 class LoginIn(BaseModel):
+    userId: str = Field(min_length=1)
     pin: str = Field(pattern=r"^\d{4,6}$")
 
 
@@ -232,14 +234,17 @@ def client_ident(request: Request) -> str:
     return (request.headers.get("x-forwarded-for") or (request.client.host if request.client else "")).split(",")[0].strip()
 
 
-async def check_pin(request: Request, pin: str, role: Optional[str] = None) -> dict:
+async def check_pin(request: Request, pin: str, role: Optional[str] = None, user_id: Optional[str] = None) -> dict:
     ident = client_ident(request)
     now = datetime.now(timezone.utc)
     att = await db.login_attempts.find_one({"identifier": ident}) or {}
     locked = att.get("locked_until")
     if locked and datetime.fromisoformat(locked) > now:
         raise HTTPException(429, "Terlalu banyak percobaan PIN salah. Coba lagi dalam 15 menit.")
-    async for doc in db.users.find({"role": role} if role else {}):
+    query = {"role": role} if role else {}
+    if user_id:
+        query["_id"] = user_id
+    async for doc in db.users.find(query):
         if verify_pin(pin, doc["pin"]):
             await db.login_attempts.delete_one({"identifier": ident})
             return doc
@@ -262,9 +267,15 @@ async def root():
     return {"message": "F&B POS API"}
 
 
+@api.get("/auth/users")
+async def login_users():
+    docs = await db.users.find({}, {"name": 1, "role": 1}).sort([("role", 1), ("name", 1)]).to_list(None)
+    return [{"id": d["_id"], "name": d["name"], "role": d["role"]} for d in docs]
+
+
 @api.post("/auth/login")
 async def login(body: LoginIn, request: Request):
-    user = User.from_mongo(await check_pin(request, body.pin))
+    user = User.from_mongo(await check_pin(request, body.pin, user_id=body.userId))
     return {"token": create_token(user.id), "user": user}
 
 
@@ -628,7 +639,7 @@ async def move_open_bill(bid: str, body: MoveIn, _: User = Depends(ANY)):
 # ---------- Transactions ----------
 @api.get("/transactions")
 async def list_transactions(start: Optional[str] = None, end: Optional[str] = None, customerId: Optional[str] = None,
-                            _: User = Depends(STAFF)):
+                            _: User = Depends(ADMIN)):
     query = {}
     if start or end:
         query["date"] = {}
@@ -660,6 +671,9 @@ async def create_transaction(body: TransactionIn, request: Request, user: User =
     if table and table["status"] == "occupied" and (table.get("orderData") or {}).get("openBillId") != (bill.id if bill else None):
         raise HTTPException(409, f"{table['name']} sedang terisi oleh open bill lain")
     customer = await get_or_404("customers", customer_id, "Pelanggan") if customer_id else None
+    shift = await get_open_shift(user.id)
+    if user.role == "kasir" and not shift:
+        raise HTTPException(400, "Buka shift kasir terlebih dahulu")
     items, total = await build_items(body.items, body.type)
     remaining = remaining_items(bill.items_json, items) if body.partial else []
     if body.method == "Cash" and body.cashGiven < total:
@@ -671,7 +685,7 @@ async def create_transaction(body: TransactionIn, request: Request, user: User =
     trx = Transaction(
         id=await next_id(f"TRX-{datetime.now(timezone.utc):%Y%m%d}", 4), date=now_iso(), type=body.type,
         method=body.method, tableId=table_id, customerId=customer_id, total=total, items_json=items,
-        userId=user.id, userName=user.name, cashGiven=cash, change=cash - total,
+        userId=user.id, userName=user.name, cashGiven=cash, change=cash - total, shiftId=shift["_id"] if shift else None,
         waiterName=body.waiterName or (bill.waiterName if bill else ""),
         tableName=table["name"] if table else "",
         customerName=customer["name"] if customer else (body.customerName or (bill.customerName if bill else "")),
@@ -780,7 +794,7 @@ async def report_summary(start: str, end: str, tz_offset: int = 0, _: User = Dep
 
 
 # ---------- Schema ----------
-COLLECTIONS = ["products", "tables", "transactions", "customers", "inventory", "recipes", "purchases", "expenses", "users", "open_bills", "void_logs"]
+COLLECTIONS = ["products", "tables", "transactions", "customers", "inventory", "recipes", "purchases", "expenses", "users", "open_bills", "void_logs", "shifts", "cash_movements"]
 
 
 @api.get("/schema")
@@ -789,6 +803,7 @@ async def schema_counts(_: User = Depends(ADMIN)):
 
 
 app.include_router(api)
+app.include_router(shifts_router)
 
 app.add_middleware(
     CORSMiddleware,
