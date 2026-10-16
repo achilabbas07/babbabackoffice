@@ -45,7 +45,7 @@ export const SCHEMA = [
     ["id", "string", "PK"], ["shiftId", "string", "FK", "shifts"], ["userId", "string", "FK", "users"], ["type", "in|out"], ["amount", "number"], ["note", "string"], ["timestamp", "string"],
   ] },
   { key: "sales_targets", name: "SalesTargets (tambahan)", desc: "Target jumlah item per shift pelayan", fields: [
-    ["id", "string", "PK"], ["productId", "string", "FK", "products"], ["targetQty", "int"], ["waiterId", "string|null", "FK", "users"],
+    ["id", "string", "PK"], ["name", "string"], ["productIds[]", "array", "FK", "products"], ["targetQty", "int"], ["waiterId", "string|null", "FK", "users"],
   ] },
   { key: "waiter_shifts", name: "WaiterShifts (tambahan)", desc: "Shift pelayan — periode hitung target", fields: [
     ["id", "string", "PK"], ["userId", "string", "FK", "users"], ["openedAt", "string"], ["closedAt", "string"], ["status", "open|closed"], ["results", "array"],
@@ -80,7 +80,7 @@ export const RELATIONS = [
   ["transactions.shiftId", "shifts.id", "N : 1", "Penjualan tunai dihitung ke kas laci shift"],
   ["shifts.userId", "users.id", "N : 1", "Kasir pemilik shift (1 shift terbuka per kasir)"],
   ["cash_movements.shiftId", "shifts.id", "N : 1", "Kas masuk/keluar menambah/mengurangi uang seharusnya"],
-  ["sales_targets.productId", "products.id", "N : 1", "Item yang ditargetkan"],
+  ["sales_targets.productIds[]", "products.id", "N : M", "Satu target bisa berisi beberapa item (jumlah digabung)"],
   ["order_logs.shiftId", "waiter_shifts.id", "N : 1", "Progres = Σ qty item target dalam shift pelayan"],
   ["open_bills.waiterId", "users.id", "N : 1", "Pelayan yang mendapat kredit order"],
 ];

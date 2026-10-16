@@ -14,8 +14,9 @@ ANY = require_roles("admin", "kasir", "waiter")
 
 
 class SalesTarget(BaseDocument):
-    productId: str
-    productName: str
+    name: str
+    productIds: List[str]
+    productNames: List[str]
     targetQty: int
     waiterId: Optional[str] = None
     waiterName: str = ""
@@ -31,7 +32,8 @@ class WaiterShift(BaseDocument):
 
 
 class TargetIn(BaseModel):
-    productId: str
+    name: str = ""
+    productIds: List[str] = Field(min_length=1)
     targetQty: int = Field(gt=0)
     waiterId: Optional[str] = None
 
@@ -79,7 +81,7 @@ async def log_order_diff(old_items: List[dict], old_waiter: Tuple, new_items: Li
 
 async def progress_for(shift: dict) -> dict:
     targets = await db.sales_targets.find({"$or": [{"waiterId": None}, {"waiterId": shift["userId"]}]}).to_list(None)
-    pids = [t["productId"] for t in targets]
+    pids = list({pid for t in targets for pid in t["productIds"]})
     agg = await db.order_logs.aggregate([
         {"$match": {"shiftId": shift["_id"], "productId": {"$in": pids}}},
         {"$group": {"_id": "$productId", "qty": {"$sum": "$qty"}}},
@@ -87,28 +89,33 @@ async def progress_for(shift: dict) -> dict:
     got = {a["_id"]: a["qty"] for a in agg}
     items = []
     for t in targets:
-        achieved = max(0, got.get(t["productId"], 0))
-        items.append({"targetId": t["_id"], "productId": t["productId"], "productName": t["productName"], "targetQty": t["targetQty"],
-                      "achieved": achieved, "pct": min(100.0, achieved / t["targetQty"] * 100)})
+        breakdown = [{"productId": pid, "productName": n, "qty": max(0, got.get(pid, 0))} for pid, n in zip(t["productIds"], t["productNames"])]
+        achieved = max(0, sum(got.get(pid, 0) for pid in t["productIds"]))
+        items.append({"targetId": t["_id"], "name": t["name"], "productIds": t["productIds"], "breakdown": breakdown,
+                      "targetQty": t["targetQty"], "achieved": achieved, "pct": min(100.0, achieved / t["targetQty"] * 100)})
     return {"shiftId": shift["_id"], "waiterId": shift["userId"], "waiterName": shift["userName"], "openedAt": shift["openedAt"], "items": items}
 
 
 @router.get("/targets")
 async def list_targets(_: User = Depends(ANY)):
-    return [SalesTarget.from_mongo(d) for d in await db.sales_targets.find().sort("productName", 1).to_list(None)]
+    return [SalesTarget.from_mongo(d) for d in await db.sales_targets.find().sort("name", 1).to_list(None)]
 
 
 async def _target_doc(body: TargetIn, target_id: str) -> SalesTarget:
-    prod = await db.products.find_one({"_id": body.productId})
-    if not prod:
-        raise HTTPException(404, "Produk tidak ditemukan")
+    ids = list(dict.fromkeys(body.productIds))
+    prods = {d["_id"]: d["name"] async for d in db.products.find({"_id": {"$in": ids}})}
+    missing = [i for i in ids if i not in prods]
+    if missing:
+        raise HTTPException(404, f"Produk tidak ditemukan: {', '.join(missing)}")
+    names = [prods[i] for i in ids]
     wname = ""
     if body.waiterId:
         w = await db.users.find_one({"_id": body.waiterId, "role": "waiter"})
         if not w:
             raise HTTPException(404, "Pelayan tidak ditemukan")
         wname = w["name"]
-    return SalesTarget(id=target_id, productId=prod["_id"], productName=prod["name"], targetQty=body.targetQty, waiterId=body.waiterId, waiterName=wname)
+    return SalesTarget(id=target_id, name=body.name.strip() or " + ".join(names), productIds=ids, productNames=names,
+                       targetQty=body.targetQty, waiterId=body.waiterId, waiterName=wname)
 
 
 @router.post("/targets")

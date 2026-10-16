@@ -5,7 +5,7 @@ const tone = (pct) => (pct >= 100 ? "bg-emerald-500" : pct >= 50 ? "bg-blue-500"
 export const TargetBar = ({ item, testid }) => (
   <div data-testid={testid}>
     <div className="mb-1.5 flex items-baseline justify-between gap-3 text-sm">
-      <span className="flex items-center gap-1.5 font-medium"><Target className="h-3.5 w-3.5 text-primary" />{item.productName}</span>
+      <span className="flex items-center gap-1.5 font-medium"><Target className="h-3.5 w-3.5 text-primary" />{item.name}</span>
       <span className="font-mono text-xs">
         <span className="text-base font-bold text-foreground">{item.achieved}</span>
         <span className="text-muted-foreground"> / {item.targetQty}</span>
@@ -15,6 +15,9 @@ export const TargetBar = ({ item, testid }) => (
     <div className="h-2.5 overflow-hidden rounded-full bg-secondary">
       <div className={`h-full rounded-full transition-[width] duration-500 ${tone(item.pct)}`} style={{ width: `${item.pct}%` }} />
     </div>
+    {item.breakdown?.length > 1 && (
+      <p className="mt-1 text-[11px] text-muted-foreground">{item.breakdown.map((b) => `${b.productName} ${b.qty}`).join(" · ")}</p>
+    )}
   </div>
 );
 
@@ -28,7 +31,7 @@ export const ProgressCard = ({ p, children }) => (
       {children}
     </div>
     {p.items.length === 0 ? <p className="text-sm text-muted-foreground">Belum ada target yang berlaku.</p> : (
-      <div className="space-y-4">{p.items.map((i) => <TargetBar key={i.targetId} item={i} testid={`target-bar-${p.waiterId}-${i.productId}`} />)}</div>
+      <div className="space-y-4">{p.items.map((i) => <TargetBar key={i.targetId} item={i} testid={`target-bar-${p.waiterId}-${i.targetId}`} />)}</div>
     )}
   </div>
 );

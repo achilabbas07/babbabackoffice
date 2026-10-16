@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Pencil, Lock } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useShift } from "@/components/ShiftGate";
 import { api, errMsg, fmtDate } from "@/lib/api";
 import { PageHeader, Empty } from "@/components/PageHeader";
-import { FormDialog } from "@/components/FormDialog";
 import { ConfirmDelete } from "@/components/ConfirmDelete";
+import { TargetDialog } from "@/components/TargetDialog";
 import { ProgressCard, TargetBar } from "@/components/TargetProgress";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -48,7 +48,7 @@ const WaiterView = () => {
       <Dialog open={!!result} onOpenChange={(o) => { if (!o) { setResult(null); refresh(); } }}>
         <DialogContent data-testid="waiter-shift-result-dialog" className="sm:max-w-md">
           <DialogHeader><DialogTitle>Hasil Shift</DialogTitle></DialogHeader>
-          <div className="space-y-4">{result?.results.map((i) => <TargetBar key={i.targetId} item={i} testid={`result-bar-${i.productId}`} />)}</div>
+          <div className="space-y-4">{result?.results.map((i) => <TargetBar key={i.targetId} item={i} testid={`result-bar-${i.targetId}`} />)}</div>
           <DialogFooter><Button data-testid="waiter-shift-result-done" onClick={() => { setResult(null); refresh(); }}>Selesai</Button></DialogFooter>
         </DialogContent>
       </Dialog>
@@ -76,20 +76,6 @@ const AdminView = () => {
     load();
   }, [load]);
 
-  const fields = useMemo(() => [
-    { name: "productId", label: "Item / Produk", type: "select", options: products.map((p) => ({ value: p.id, label: `${p.name} (${p.category})` })) },
-    { name: "targetQty", label: "Target jumlah item per shift", type: "number", required: true },
-    { name: "waiterId", label: "Berlaku untuk", type: "select", allowNone: true, noneLabel: "Semua pelayan", options: waiters.map((w) => ({ value: w.id, label: w.name })) },
-  ], [products, waiters]);
-
-  const save = async (f) => {
-    const body = { productId: f.productId, targetQty: Number(f.targetQty) || 0, waiterId: f.waiterId || null };
-    if (dialog.id) await api.put(`/targets/${dialog.id}`, body);
-    else await api.post("/targets", body);
-    toast.success("Target tersimpan");
-    load();
-  };
-
   return (
     <div className="space-y-10">
       <div>
@@ -99,17 +85,20 @@ const AdminView = () => {
         {targets.length === 0 ? <Empty testid="targets-empty" text="Belum ada target." /> : (
           <div className="overflow-x-auto rounded-2xl border border-border bg-card">
             <Table>
-              <TableHeader><TableRow><TableHead>Item</TableHead><TableHead className="text-right">Target / shift</TableHead><TableHead>Berlaku untuk</TableHead><TableHead /></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Target</TableHead><TableHead>Item</TableHead><TableHead className="text-right">Target / shift</TableHead><TableHead>Berlaku untuk</TableHead><TableHead /></TableRow></TableHeader>
               <TableBody>
                 {targets.map((t) => (
                   <TableRow key={t.id} data-testid={`target-row-${t.id}`}>
-                    <TableCell className="font-medium">{t.productName}</TableCell>
+                    <TableCell className="font-medium">{t.name}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">{t.productNames.map((n) => <span key={n} className="rounded-full bg-secondary px-2 py-0.5 text-xs">{n}</span>)}</div>
+                    </TableCell>
                     <TableCell className="text-right font-mono">{t.targetQty}</TableCell>
                     <TableCell className="text-muted-foreground">{t.waiterName || "Semua pelayan"}</TableCell>
                     <TableCell>
                       <div className="flex justify-end gap-1">
                         <button data-testid={`target-edit-${t.id}`} onClick={() => setDialog(t)} className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:text-foreground"><Pencil className="h-4 w-4" /></button>
-                        <ConfirmDelete testid={`target-delete-${t.id}`} title={`Hapus target ${t.productName}?`} onConfirm={async () => { await api.delete(`/targets/${t.id}`); load(); }} />
+                        <ConfirmDelete testid={`target-delete-${t.id}`} title={`Hapus target ${t.name}?`} onConfirm={async () => { await api.delete(`/targets/${t.id}`); load(); }} />
                       </div>
                     </TableCell>
                   </TableRow>
@@ -136,7 +125,7 @@ const AdminView = () => {
                   {h.results.length === 0 && <span className="text-xs text-muted-foreground">Tanpa target</span>}
                   {h.results.map((r) => (
                     <span key={r.targetId} className={`rounded-full px-2.5 py-1 text-xs font-medium ${r.achieved >= r.targetQty ? "bg-emerald-100 text-emerald-700" : "bg-secondary text-muted-foreground"}`}>
-                      {r.productName}: {r.achieved}/{r.targetQty}
+                      {r.name}: {r.achieved}/{r.targetQty}
                     </span>
                   ))}
                 </div>
@@ -145,7 +134,7 @@ const AdminView = () => {
           </div>
         )}
       </section>
-      <FormDialog open={!!dialog} onOpenChange={(o) => !o && setDialog(null)} title={dialog?.id ? "Edit Target" : "Tambah Target"} fields={fields} initial={dialog} onSubmit={save} testid="target-form" />
+      <TargetDialog target={dialog} products={products} waiters={waiters} onClose={() => setDialog(null)} onSaved={load} />
     </div>
   );
 };
