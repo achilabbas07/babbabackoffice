@@ -1,0 +1,156 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { Plus, Pencil, Lock } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { useShift } from "@/components/ShiftGate";
+import { api, errMsg, fmtDate } from "@/lib/api";
+import { PageHeader, Empty } from "@/components/PageHeader";
+import { FormDialog } from "@/components/FormDialog";
+import { ConfirmDelete } from "@/components/ConfirmDelete";
+import { ProgressCard, TargetBar } from "@/components/TargetProgress";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+const WaiterView = () => {
+  const { refresh } = useShift();
+  const [progress, setProgress] = useState([]);
+  const [confirm, setConfirm] = useState(false);
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    api.get("/targets/progress").then((r) => setProgress(r.data)).catch((e) => toast.error(errMsg(e)));
+  }, []);
+
+  const close = async () => {
+    try {
+      const { data } = await api.post("/waiter-shifts/close");
+      setConfirm(false);
+      setResult(data);
+    } catch (e) {
+      toast.error(errMsg(e));
+    }
+  };
+
+  return (
+    <div>
+      <PageHeader title="Target Sales Saya" subtitle="Dihitung dari item yang dipesan (saat order) sejak shift dimulai.">
+        <Button data-testid="close-waiter-shift-button" onClick={() => setConfirm(true)}><Lock className="mr-1 h-4 w-4" />Tutup Shift</Button>
+      </PageHeader>
+      {progress.length === 0 ? <Empty testid="target-empty" text="Belum ada shift aktif." /> : <div className="max-w-2xl">{progress.map((p) => <ProgressCard key={p.shiftId} p={p} />)}</div>}
+      <Dialog open={confirm} onOpenChange={setConfirm}>
+        <DialogContent data-testid="close-waiter-shift-dialog" className="sm:max-w-sm">
+          <DialogHeader><DialogTitle>Tutup shift sekarang?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Pencapaian target disimpan. Shift berikutnya mulai dari nol.</p>
+          <DialogFooter><Button data-testid="close-waiter-shift-confirm" onClick={close}>Ya, tutup shift</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!result} onOpenChange={(o) => { if (!o) { setResult(null); refresh(); } }}>
+        <DialogContent data-testid="waiter-shift-result-dialog" className="sm:max-w-md">
+          <DialogHeader><DialogTitle>Hasil Shift</DialogTitle></DialogHeader>
+          <div className="space-y-4">{result?.results.map((i) => <TargetBar key={i.targetId} item={i} testid={`result-bar-${i.productId}`} />)}</div>
+          <DialogFooter><Button data-testid="waiter-shift-result-done" onClick={() => { setResult(null); refresh(); }}>Selesai</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+const AdminView = () => {
+  const [targets, setTargets] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [waiters, setWaiters] = useState([]);
+  const [progress, setProgress] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [dialog, setDialog] = useState(null);
+
+  const load = useCallback(async () => {
+    try {
+      const [t, p, w, pr, h] = await Promise.all([api.get("/targets"), api.get("/products"), api.get("/users/waiters"), api.get("/targets/progress"), api.get("/waiter-shifts")]);
+      setTargets(t.data); setProducts(p.data); setWaiters(w.data); setProgress(pr.data); setHistory(h.data);
+    } catch (e) {
+      toast.error(errMsg(e));
+    }
+  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const fields = useMemo(() => [
+    { name: "productId", label: "Item / Produk", type: "select", options: products.map((p) => ({ value: p.id, label: `${p.name} (${p.category})` })) },
+    { name: "targetQty", label: "Target jumlah item per shift", type: "number", required: true },
+    { name: "waiterId", label: "Berlaku untuk", type: "select", allowNone: true, noneLabel: "Semua pelayan", options: waiters.map((w) => ({ value: w.id, label: w.name })) },
+  ], [products, waiters]);
+
+  const save = async (f) => {
+    const body = { productId: f.productId, targetQty: Number(f.targetQty) || 0, waiterId: f.waiterId || null };
+    if (dialog.id) await api.put(`/targets/${dialog.id}`, body);
+    else await api.post("/targets", body);
+    toast.success("Target tersimpan");
+    load();
+  };
+
+  return (
+    <div className="space-y-10">
+      <div>
+        <PageHeader title="Target Sales Pelayan" subtitle="Target jumlah item per shift pelayan. Dihitung saat order (bukan saat bayar), reset setiap shift baru.">
+          <Button data-testid="add-target-button" onClick={() => setDialog({})}><Plus className="mr-1 h-4 w-4" />Tambah Target</Button>
+        </PageHeader>
+        {targets.length === 0 ? <Empty testid="targets-empty" text="Belum ada target." /> : (
+          <div className="overflow-x-auto rounded-2xl border border-border bg-card">
+            <Table>
+              <TableHeader><TableRow><TableHead>Item</TableHead><TableHead className="text-right">Target / shift</TableHead><TableHead>Berlaku untuk</TableHead><TableHead /></TableRow></TableHeader>
+              <TableBody>
+                {targets.map((t) => (
+                  <TableRow key={t.id} data-testid={`target-row-${t.id}`}>
+                    <TableCell className="font-medium">{t.productName}</TableCell>
+                    <TableCell className="text-right font-mono">{t.targetQty}</TableCell>
+                    <TableCell className="text-muted-foreground">{t.waiterName || "Semua pelayan"}</TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-1">
+                        <button data-testid={`target-edit-${t.id}`} onClick={() => setDialog(t)} className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:text-foreground"><Pencil className="h-4 w-4" /></button>
+                        <ConfirmDelete testid={`target-delete-${t.id}`} title={`Hapus target ${t.productName}?`} onConfirm={async () => { await api.delete(`/targets/${t.id}`); load(); }} />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
+      <section>
+        <h2 className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Progres shift berjalan</h2>
+        {progress.length === 0 ? <Empty testid="progress-empty" text="Tidak ada pelayan dengan shift aktif." /> : (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{progress.map((p) => <ProgressCard key={p.shiftId} p={p} />)}</div>
+        )}
+      </section>
+      <section>
+        <h2 className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Riwayat shift pelayan</h2>
+        {history.length === 0 ? <Empty testid="waiter-history-empty" text="Belum ada shift pelayan yang ditutup." /> : (
+          <div className="divide-y divide-border rounded-2xl border border-border bg-card">
+            {history.map((h) => (
+              <div key={h.id} data-testid={`waiter-shift-${h.id}`} className="grid gap-2 px-5 py-3 md:grid-cols-[220px_1fr] md:items-center">
+                <div><p className="font-semibold">{h.userName}</p><p className="font-mono text-xs text-muted-foreground">{fmtDate(h.openedAt)} → {fmtDate(h.closedAt)}</p></div>
+                <div className="flex flex-wrap gap-2">
+                  {h.results.length === 0 && <span className="text-xs text-muted-foreground">Tanpa target</span>}
+                  {h.results.map((r) => (
+                    <span key={r.targetId} className={`rounded-full px-2.5 py-1 text-xs font-medium ${r.achieved >= r.targetQty ? "bg-emerald-100 text-emerald-700" : "bg-secondary text-muted-foreground"}`}>
+                      {r.productName}: {r.achieved}/{r.targetQty}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+      <FormDialog open={!!dialog} onOpenChange={(o) => !o && setDialog(null)} title={dialog?.id ? "Edit Target" : "Tambah Target"} fields={fields} initial={dialog} onSubmit={save} testid="target-form" />
+    </div>
+  );
+};
+
+export default function Targets() {
+  const { user } = useAuth();
+  return user.role === "waiter" ? <WaiterView /> : <AdminView />;
+}

@@ -145,6 +145,7 @@ class Transaction(BaseDocument):
     customerName: str = ""
     userName: str = ""
     shiftId: Optional[str] = None
+    waiterId: Optional[str] = None
 
 
 class Purchase(BaseDocument):
@@ -176,6 +177,7 @@ class OpenBill(BaseDocument):
     tableId: Optional[str] = None
     customerId: Optional[str] = None
     userName: str = ""
+    waiterId: Optional[str] = None
 
 
 async def get_current_user(request: Request) -> User:

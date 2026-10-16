@@ -19,11 +19,12 @@ import Users from "@/pages/Users";
 import Schema from "@/pages/Schema";
 import Cash from "@/pages/Cash";
 import Shifts from "@/pages/Shifts";
+import Targets from "@/pages/Targets";
 
 const PAGES = {
   "/pos": POS, "/tables": Tables, "/open-bills": OpenBills, "/transactions": Transactions, "/customers": Customers,
   "/products": Products, "/inventory": Inventory, "/purchases": Purchases, "/expenses": Expenses, "/reports": Reports,
-  "/users": Users, "/schema": Schema, "/cash": Cash, "/shifts": Shifts,
+  "/users": Users, "/schema": Schema, "/cash": Cash, "/shifts": Shifts, "/targets": Targets,
 };
 
 const Protected = ({ roles, children }) => {

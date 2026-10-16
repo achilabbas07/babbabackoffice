@@ -5,6 +5,7 @@ from core import (  # noqa: I001
 )
 from seed import seed_all
 from shifts import router as shifts_router, get_open_shift
+from targets import router as targets_router, log_order_diff, resolve_waiter
 
 import logging
 from collections import defaultdict
@@ -119,6 +120,7 @@ class OpenBillIn(BaseModel):
     waiterName: str = ""
     items: List[OrderItemIn] = Field(min_length=1)
     adminPin: Optional[str] = None
+    waiterId: Optional[str] = None
 
 
 class TransactionIn(OpenBillIn):
@@ -514,11 +516,12 @@ async def compose_bill(body: OpenBillIn, user: User, bill_id: str, timestamp: st
         raise HTTPException(400, f"Pesanan {body.type} harus langsung dibayar, tidak bisa disimpan sebagai open bill")
     items, total = await build_items(body.items, body.type)
     cust = await get_or_404("customers", body.customerId, "Pelanggan") if body.customerId else None
+    wid, wname = await resolve_waiter(body.waiterId, body.waiterName, user)
     return OpenBill(
         id=bill_id, timestamp=timestamp, type=body.type, total=total, items_json=items,
         customerName=body.customerName or (cust["name"] if cust else ""), customerId=body.customerId,
         tableId=body.tableId if body.type == "Dine In" else None, userId=user.id, userName=user.name,
-        waiterName=body.waiterName or (user.name if user.role == "waiter" else ""),
+        waiterName=wname, waiterId=wid,
     )
 
 
@@ -538,6 +541,7 @@ async def create_open_bill(body: OpenBillIn, user: User = Depends(ANY)):
     if bill.tableId:
         await occupy_table(bill.tableId, bill)
     await db.open_bills.insert_one(bill.to_mongo())
+    await log_order_diff([], (None, ""), bill.items_json, (bill.waiterId, bill.waiterName), "bill_create", bill.id)
     return bill
 
 
@@ -566,6 +570,7 @@ async def update_open_bill(bid: str, body: OpenBillIn, request: Request, user: U
     if old.tableId and old.tableId != bill.tableId:
         await free_table(old.tableId)
     await db.open_bills.replace_one({"_id": bid}, bill.to_mongo())
+    await log_order_diff(old.items_json, (old.waiterId, old.waiterName), bill.items_json, (bill.waiterId, bill.waiterName), "bill_update", bid)
     return bill
 
 
@@ -606,6 +611,7 @@ async def void_open_bill(bid: str, body: VoidIn, request: Request, user: User = 
     })
     await db.open_bills.delete_one({"_id": bid})
     await free_table(bill.get("tableId"))
+    await log_order_diff(bill["items_json"], (bill.get("waiterId"), bill.get("waiterName", "")), [], (bill.get("waiterId"), ""), "void", bid)
     return {"ok": True, "authorizedBy": approver}
 
 
@@ -682,15 +688,25 @@ async def create_transaction(body: TransactionIn, request: Request, user: User =
 
     await consume_stock(await stock_needs(items))
 
+    if body.waiterId:
+        wid, wname = await resolve_waiter(body.waiterId, "", user)
+    elif bill:
+        wid, wname = bill.waiterId, body.waiterName or bill.waiterName
+    else:
+        wid, wname = None, body.waiterName
+
     trx = Transaction(
         id=await next_id(f"TRX-{datetime.now(timezone.utc):%Y%m%d}", 4), date=now_iso(), type=body.type,
         method=body.method, tableId=table_id, customerId=customer_id, total=total, items_json=items,
         userId=user.id, userName=user.name, cashGiven=cash, change=cash - total, shiftId=shift["_id"] if shift else None,
-        waiterName=body.waiterName or (bill.waiterName if bill else ""),
+        waiterName=wname, waiterId=wid,
         tableName=table["name"] if table else "",
         customerName=customer["name"] if customer else (body.customerName or (bill.customerName if bill else "")),
     )
     await db.transactions.insert_one(trx.to_mongo())
+    if not body.partial:
+        old_items, old_w = (bill.items_json, (bill.waiterId, bill.waiterName)) if bill else ([], (None, ""))
+        await log_order_diff(old_items, old_w, items, (wid, wname), "payment" if bill else "direct", trx.id)
     if customer:
         await db.customers.update_one({"_id": customer_id}, {"$inc": {"visits": 1, "total_spent": total, "points": int(total // 10000)}})
     if remaining:
@@ -794,7 +810,7 @@ async def report_summary(start: str, end: str, tz_offset: int = 0, _: User = Dep
 
 
 # ---------- Schema ----------
-COLLECTIONS = ["products", "tables", "transactions", "customers", "inventory", "recipes", "purchases", "expenses", "users", "open_bills", "void_logs", "shifts", "cash_movements"]
+COLLECTIONS = ["products", "tables", "transactions", "customers", "inventory", "recipes", "purchases", "expenses", "users", "open_bills", "void_logs", "shifts", "cash_movements", "sales_targets", "waiter_shifts", "order_logs"]
 
 
 @api.get("/schema")
@@ -804,6 +820,7 @@ async def schema_counts(_: User = Depends(ADMIN)):
 
 app.include_router(api)
 app.include_router(shifts_router)
+app.include_router(targets_router)
 
 app.add_middleware(
     CORSMiddleware,

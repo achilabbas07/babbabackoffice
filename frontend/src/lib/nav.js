@@ -1,5 +1,5 @@
 import {
-  ShoppingCart, LayoutGrid, ReceiptText, History, Users, UtensilsCrossed, Boxes, Truck, Wallet, BarChart3, UserCog, Database, Banknote, ClipboardList,
+  ShoppingCart, LayoutGrid, ReceiptText, History, Users, UtensilsCrossed, Boxes, Truck, Wallet, BarChart3, UserCog, Database, Banknote, ClipboardList, Target,
 } from "lucide-react";
 
 const ALL = ["admin", "kasir", "waiter"];
@@ -10,6 +10,7 @@ export const NAV = [
   { to: "/pos", label: "Kasir", icon: ShoppingCart, roles: ALL },
   { to: "/tables", label: "Meja", icon: LayoutGrid, roles: ALL },
   { to: "/open-bills", label: "Open Bill", icon: ReceiptText, roles: ALL },
+  { to: "/targets", label: "Target Sales", icon: Target, roles: ["admin", "waiter"] },
   { to: "/cash", label: "Kas & Shift", icon: Banknote, roles: STAFF },
   { to: "/transactions", label: "Transaksi", icon: History, roles: ADMIN },
   { to: "/customers", label: "Pelanggan", icon: Users, roles: STAFF },

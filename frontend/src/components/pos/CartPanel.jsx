@@ -14,7 +14,6 @@ export const isDirectPay = (type) => ORDER_TYPES.some((t) => t.id === type && t.
 const inputCls = "h-9 min-w-0 rounded-lg border border-border bg-transparent px-3 text-sm outline-none focus:border-primary";
 
 const OrderOptions = ({ order, setOrder, tables, customers, waiters, canPay }) => {
-  const waiterNames = [...new Set([...waiters.map((w) => w.name), order.waiterName].filter(Boolean))];
   const freeTables = tables.filter((t) => t.kind !== "fixture" && (t.status !== "occupied" || t.orderData?.openBillId === order.billId));
   const set = (patch) => setOrder((o) => ({ ...o, ...patch }));
   const types = ORDER_TYPES.filter((t) => canPay || !t.direct);
@@ -59,11 +58,11 @@ const OrderOptions = ({ order, setOrder, tables, customers, waiters, canPay }) =
       <div className="grid grid-cols-2 gap-2">
         <input data-testid="order-customer-name-input" value={order.customerName} onChange={(e) => set({ customerName: e.target.value })}
           placeholder={order.type === "Ojek Online" ? "Nama / No. order" : "Nama pemesan"} className={inputCls} />
-        <Select value={order.waiterName || "none"} onValueChange={(v) => set({ waiterName: v === "none" ? "" : v })}>
+        <Select value={order.waiterId || "none"} onValueChange={(v) => set({ waiterId: v === "none" ? null : v, waiterName: v === "none" ? "" : waiters.find((w) => w.id === v)?.name || "" })}>
           <SelectTrigger data-testid="order-waiter-select" className="h-9"><SelectValue placeholder="Pelayan" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="none">Tanpa pelayan</SelectItem>
-            {waiterNames.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+            {waiters.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>

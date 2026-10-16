@@ -44,6 +44,16 @@ export const SCHEMA = [
   { key: "cash_movements", name: "CashMovements (tambahan)", desc: "Kas masuk & kas keluar selama shift", fields: [
     ["id", "string", "PK"], ["shiftId", "string", "FK", "shifts"], ["userId", "string", "FK", "users"], ["type", "in|out"], ["amount", "number"], ["note", "string"], ["timestamp", "string"],
   ] },
+  { key: "sales_targets", name: "SalesTargets (tambahan)", desc: "Target jumlah item per shift pelayan", fields: [
+    ["id", "string", "PK"], ["productId", "string", "FK", "products"], ["targetQty", "int"], ["waiterId", "string|null", "FK", "users"],
+  ] },
+  { key: "waiter_shifts", name: "WaiterShifts (tambahan)", desc: "Shift pelayan — periode hitung target", fields: [
+    ["id", "string", "PK"], ["userId", "string", "FK", "users"], ["openedAt", "string"], ["closedAt", "string"], ["status", "open|closed"], ["results", "array"],
+  ] },
+  { key: "order_logs", name: "OrderLogs (tambahan)", desc: "Log qty item saat order (+/−) per pelayan", fields: [
+    ["id", "uuid", "PK"], ["waiterId", "string", "FK", "users"], ["shiftId", "string", "FK", "waiter_shifts"], ["productId", "string", "FK", "products"],
+    ["qty", "int (delta)"], ["source", "string"], ["refId", "string"], ["timestamp", "string"],
+  ] },
   { key: "void_logs", name: "VoidLogs (tambahan)", desc: "Audit void open bill dengan otorisasi PIN admin", fields: [
     ["id", "string", "PK"], ["billId", "string"], ["tableId", "string", "FK", "tables"], ["total", "number"], ["items_json", "array"],
     ["reason", "string"], ["requestedBy", "string"], ["authorizedBy", "string"], ["timestamp", "string"],
@@ -70,4 +80,7 @@ export const RELATIONS = [
   ["transactions.shiftId", "shifts.id", "N : 1", "Penjualan tunai dihitung ke kas laci shift"],
   ["shifts.userId", "users.id", "N : 1", "Kasir pemilik shift (1 shift terbuka per kasir)"],
   ["cash_movements.shiftId", "shifts.id", "N : 1", "Kas masuk/keluar menambah/mengurangi uang seharusnya"],
+  ["sales_targets.productId", "products.id", "N : 1", "Item yang ditargetkan"],
+  ["order_logs.shiftId", "waiter_shifts.id", "N : 1", "Progres = Σ qty item target dalam shift pelayan"],
+  ["open_bills.waiterId", "users.id", "N : 1", "Pelayan yang mendapat kredit order"],
 ];

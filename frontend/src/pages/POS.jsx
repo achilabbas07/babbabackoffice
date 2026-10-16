@@ -10,7 +10,7 @@ import { ReceiptDialog } from "@/components/ReceiptDialog";
 import { AdminPinDialog } from "@/components/tables/AdminPinDialog";
 
 const emptyOrder = (user) => ({
-  billId: null, type: "Dine In", tableId: "none", customerId: "none", customerName: "", waiterName: user.role === "waiter" ? user.name : "",
+  billId: null, type: "Dine In", tableId: "none", customerId: "none", customerName: "", waiterName: user.role === "waiter" ? user.name : "", waiterId: user.role === "waiter" ? user.id : null,
 });
 
 export default function POS() {
@@ -50,7 +50,7 @@ export default function POS() {
     const tableId = params.get("table");
     if (billId) {
       api.get(`/open-bills/${billId}`).then(({ data }) => {
-        setOrder({ billId: data.id, type: data.type, tableId: data.tableId || "none", customerId: data.customerId || "none", customerName: data.customerName, waiterName: data.waiterName });
+        setOrder({ billId: data.id, type: data.type, tableId: data.tableId || "none", customerId: data.customerId || "none", customerName: data.customerName, waiterName: data.waiterName, waiterId: data.waiterId || null });
         setCart(data.items_json.map((i) => ({ productId: i.productId, name: i.productName, price: i.price, qty: i.qty, notes: i.notes || "" })));
         setSaved(Object.fromEntries(data.items_json.map((i) => [i.productId, i.qty])));
         setAuthPin(null);
@@ -90,6 +90,7 @@ export default function POS() {
     customerId: order.customerId !== "none" ? order.customerId : null,
     customerName: order.customerName,
     waiterName: order.waiterName,
+    waiterId: order.waiterId || null,
     adminPin: authPin,
     items: cart.map(({ productId, qty, notes }) => ({ productId, qty, notes })),
   });
