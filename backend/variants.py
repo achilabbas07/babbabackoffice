@@ -1,7 +1,7 @@
 import re
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -17,8 +17,8 @@ def product_num(product_id: str) -> int:
 
 
 @router.get("/menu-variants")
-async def list_menu_variants(_: User = Depends(ANY)):
-    rows = await db.menu_variants.find().sort("_id", 1).to_list(None)
+async def list_menu_variants(menu_id: Optional[int] = None, _: User = Depends(ANY)):
+    rows = await db.menu_variants.find({"menu_id": menu_id} if menu_id is not None else None).sort("_id", 1).to_list(None)
     by_variant = defaultdict(list)
     async for r in db.variant_ingredients.find({"variant_id": {"$in": [r["_id"] for r in rows]}}):
         by_variant[r["variant_id"]].append(r)

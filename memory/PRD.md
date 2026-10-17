@@ -20,6 +20,8 @@ Latest request: "Lanjutkan implementasi kode berdasarkan tabel 'menu_variants', 
   - Variant name shown in receipt, kitchen ticket, open bills, table detail, split bill.
   - Cart blocks adding beyond available variant stock with toast warning.
 
+- 2026-10-17: Variants fetched per clicked product: frontend strips "PRD-" → integer, calls `GET /api/menu-variants?menu_id=<int>`. Note: Supabase row variant id=34 currently has menu_id=10 (Aneka Kue), not 34 (Kentang Goreng) — user data needs correction.
+
 ## Backlog
 - P1: Admin UI to manage variants / raw materials / variant ingredients (currently via Supabase dashboard).
 - P2: Purchases for raw_materials (restock flow).

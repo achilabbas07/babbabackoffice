@@ -34,9 +34,8 @@ export default function POS() {
 
   const loadRefs = useCallback(async () => {
     try {
-      const [p, t, c, w, v] = await Promise.all([api.get("/products"), api.get("/tables"), api.get("/customers"), api.get("/users/waiters"), api.get("/menu-variants")]);
+      const [p, t, c, w] = await Promise.all([api.get("/products"), api.get("/tables"), api.get("/customers"), api.get("/users/waiters")]);
       setProducts(p.data);
-      setVariants(v.data);
       setTables(t.data);
       setCustomers(c.data);
       setWaiters(w.data);
@@ -75,8 +74,19 @@ export default function POS() {
       ? c.map((i) => (i.key === key ? { ...i, qty: i.qty + 1 } : i))
       : [...c, { key, productId: p.id, variantId: v ? v.id : null, extra: v ? Number(v.additional_price || 0) : 0, name: v ? `${p.name} (${v.variant_name})` : p.name, price: p.price, qty: 1, notes: "" }]));
   };
-  const variantsOf = (p) => variants.filter((v) => v.menu_id === Number(p.id.replace(/\D/g, "")));
-  const add = (p) => (variantsOf(p).length ? setVariantFor(p) : addLine(p, null));
+  const menuIdOf = (p) => parseInt(String(p.id).replace(/^PRD-/i, "").replace(/\D/g, ""), 10);
+  const variantsOf = (p) => variants.filter((v) => v.menu_id === menuIdOf(p));
+  const add = async (p) => {
+    const menuId = menuIdOf(p);
+    try {
+      const { data } = await api.get("/menu-variants", { params: { menu_id: menuId } });
+      setVariants((vs) => [...vs.filter((v) => v.menu_id !== menuId), ...data]);
+      if (data.length) setVariantFor(p);
+      else addLine(p, null);
+    } catch (e) {
+      toast.error(errMsg(e));
+    }
+  };
 
   const reset = () => {
     setOrder(emptyOrder(user));
