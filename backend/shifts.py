@@ -12,7 +12,7 @@ ADMIN = require_roles("admin")
 
 
 class Shift(BaseDocument):
-    userId: str
+    userId: Optional[str] = None
     userName: str
     openedAt: str
     openingCash: float
@@ -31,7 +31,7 @@ class Shift(BaseDocument):
 
 class CashMovement(BaseDocument):
     shiftId: str
-    userId: str
+    userId: Optional[str] = None
     userName: str
     type: str
     amount: float

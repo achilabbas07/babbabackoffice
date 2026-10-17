@@ -14,8 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 const WaiterView = () => {
   const { refresh } = useShift();
-  const [progress, setProgress] = useState([]);
-  const [confirm, setConfirm] = useState(false);
+  const [progress, setProgress] = useState(null);
   const [result, setResult] = useState(null);
 
   useEffect(() => {
@@ -37,7 +36,7 @@ const WaiterView = () => {
       <PageHeader title="Target Sales Saya" subtitle="Dihitung dari item yang dipesan (saat order) sejak shift dimulai.">
         <Button data-testid="close-waiter-shift-button" onClick={() => setConfirm(true)}><Lock className="mr-1 h-4 w-4" />Tutup Shift</Button>
       </PageHeader>
-      {progress.length === 0 ? <Empty testid="target-empty" text="Belum ada shift aktif." /> : <div className="max-w-2xl">{progress.map((p) => <ProgressCard key={p.shiftId} p={p} />)}</div>}
+      {progress === null ? <p className="py-10 text-center text-sm text-muted-foreground">Memuat target...</p> : progress.length === 0 ? <Empty testid="target-empty" text="Belum ada shift aktif." /> : <div className="max-w-2xl">{progress.map((p) => <ProgressCard key={p.shiftId} p={p} />)}</div>}
       <Dialog open={confirm} onOpenChange={setConfirm}>
         <DialogContent data-testid="close-waiter-shift-dialog" className="sm:max-w-sm">
           <DialogHeader><DialogTitle>Tutup shift sekarang?</DialogTitle></DialogHeader>

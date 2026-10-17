@@ -113,8 +113,8 @@ export default function POS() {
     loadRefs();
   });
 
-  const pay = (method, cashGiven) => run(async () => {
-    const { data } = await api.post("/transactions", { ...payload(), method, cashGiven, openBillId: order.billId });
+  const pay = (method, cashGiven, extra = {}) => run(async () => {
+    const { data } = await api.post("/transactions", { ...payload(), method, cashGiven, openBillId: order.billId, ...extra });
     setPayOpen(false);
     setReceipt(data);
     toast.success(`Transaksi ${data.id} berhasil`);
@@ -131,13 +131,13 @@ export default function POS() {
   const total = cart.reduce((s, i) => s + priceOf(i) * i.qty, 0);
 
   return (
-    <div className="grid gap-4 md:grid-cols-[1fr_300px] lg:grid-cols-[1fr_340px] xl:grid-cols-[1fr_380px]">
+    <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_340px] lg:grid-cols-[minmax(0,1fr)_350px] xl:grid-cols-[minmax(0,1fr)_380px]">
       <ProductGrid products={products} onAdd={add} ojol={ojol} />
       <CartPanel
         order={order} setOrder={setOrder} tables={tables} customers={customers} waiters={waiters} cart={cart} setCart={setCart} priceOf={priceOf} total={total}
         canPay={user.role !== "waiter"} busy={busy} onQty={changeQty} onRemove={removeItem} isLocked={isLocked} onSaveBill={saveBill} onPay={() => setPayOpen(true)} onReset={reset}
       />
-      <PayDialog open={payOpen} onOpenChange={setPayOpen} total={total} onPay={pay} busy={busy} />
+      <PayDialog open={payOpen} onOpenChange={setPayOpen} total={total} onPay={pay} busy={busy} customerId={order.customerId !== "none" ? order.customerId : null} />
       <ReceiptDialog trx={receipt} onClose={() => setReceipt(null)} />
       <AdminPinDialog open={!!pending} onClose={() => setPending(null)} testid="reduce-pin" needPin title="Otorisasi Admin"
         description="Item ini sudah tersimpan di bill. Mengurangi atau menghapus item butuh PIN admin."

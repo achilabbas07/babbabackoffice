@@ -36,6 +36,9 @@ export const ReceiptDialog = ({ trx, onClose }) => (
             ))}
           </div>
           <div className="space-y-1 border-t border-dashed border-border pt-3">
+            {trx.discount > 0 && <Row label="Subtotal" value={rp(trx.subtotal)} />}
+            {trx.promoDiscount > 0 && <Row label={`Promo ${trx.promoCode}`} value={`− ${rp(trx.promoDiscount)}`} testid="receipt-promo" />}
+            {trx.pointsDiscount > 0 && <Row label={`Tukar ${trx.pointsRedeemed} poin`} value={`− ${rp(trx.pointsDiscount)}`} testid="receipt-points" />}
             <Row label="Total" value={rp(trx.total)} bold testid="receipt-total" />
             <Row label={`Bayar (${trx.method})`} value={rp(trx.cashGiven)} />
             <Row label="Kembalian" value={rp(trx.change)} testid="receipt-change" />

@@ -138,7 +138,7 @@ class Transaction(BaseDocument):
     customerId: Optional[str] = None
     total: float
     items_json: List[dict]
-    userId: str
+    userId: Optional[str] = None
     cashGiven: float
     waiterName: str = ""
     change: float = 0
@@ -147,6 +147,12 @@ class Transaction(BaseDocument):
     userName: str = ""
     shiftId: Optional[str] = None
     waiterId: Optional[str] = None
+    subtotal: float = 0
+    discount: float = 0
+    promoCode: Optional[str] = None
+    promoDiscount: float = 0
+    pointsRedeemed: int = 0
+    pointsDiscount: float = 0
 
 
 class Purchase(BaseDocument):
@@ -154,7 +160,7 @@ class Purchase(BaseDocument):
     supplier: str
     items_json: List[dict]
     total_cost: float
-    userId: str
+    userId: Optional[str] = None
     userName: str = ""
 
 
@@ -163,7 +169,7 @@ class Expense(BaseDocument):
     category: str
     description: str = ""
     amount: float
-    userId: str
+    userId: Optional[str] = None
     userName: str = ""
 
 
@@ -173,7 +179,7 @@ class OpenBill(BaseDocument):
     customerName: str = ""
     total: float
     items_json: List[dict]
-    userId: str
+    userId: Optional[str] = None
     waiterName: str = ""
     tableId: Optional[str] = None
     customerId: Optional[str] = None

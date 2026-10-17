@@ -75,12 +75,12 @@ export const TableDetailDialog = ({ table, tables, onClose, onChanged, onPaid })
     }
   };
 
-  const doPay = async (method, cashGiven) => {
+  const doPay = async (method, cashGiven, extra = {}) => {
     setBusy(true);
     try {
       const { data } = await api.post("/transactions", {
         type: bill.type, tableId: bill.tableId, customerId: bill.customerId, customerName: bill.customerName, waiterName: bill.waiterName,
-        items: pay.items.map(({ productId, qty, notes }) => ({ productId, qty, notes })), method, cashGiven, openBillId: bill.id, partial: pay.partial,
+        items: pay.items.map(({ productId, qty, notes }) => ({ productId, qty, notes })), method, cashGiven, openBillId: bill.id, partial: pay.partial, ...extra,
       });
       setPay(null);
       setMode(null);
@@ -148,7 +148,7 @@ export const TableDetailDialog = ({ table, tables, onClose, onChanged, onPaid })
       </Dialog>
 
       <SplitBillDialog bill={bill} open={mode === "split"} onClose={() => setMode(null)} onConfirm={(items) => setPay({ items, partial: true })} />
-      <PayDialog open={!!pay} onOpenChange={(o) => !o && setPay(null)} total={(pay?.items || []).reduce((sum, i) => sum + i.price * i.qty, 0)} onPay={doPay} busy={busy} />
+      <PayDialog open={!!pay} onOpenChange={(o) => !o && setPay(null)} total={(pay?.items || []).reduce((sum, i) => sum + i.price * i.qty, 0)} onPay={doPay} busy={busy} customerId={bill?.customerId || null} />
       <PickTableDialog open={mode === "merge"} onClose={() => setMode(null)} testid="merge-table" title={`Gabungkan meja lain ke ${table?.name}`}
         options={others.filter((t) => t.status === "occupied")}
         onPick={(t) => run(async () => { await api.post(`/open-bills/${bill.id}/merge`, { sourceBillId: t.orderData.openBillId }); setMode(null); }, `${t.name} digabung ke ${table.name}`)} />

@@ -6,6 +6,7 @@ from core import (  # noqa: I001
 from seed import seed_all
 from shifts import router as shifts_router, get_open_shift
 from targets import router as targets_router, log_order_diff, resolve_waiter
+from discounts import router as discounts_router, promo_discount, points_discount
 
 import logging
 from collections import defaultdict
@@ -128,6 +129,9 @@ class TransactionIn(OpenBillIn):
     cashGiven: float = Field(0, ge=0)
     openBillId: Optional[str] = None
     partial: bool = False
+    promoCode: Optional[str] = None
+    redeemPoints: bool = False
+    discountPin: Optional[str] = None
 
 
 class PurchaseItemIn(BaseModel):
@@ -672,8 +676,19 @@ async def create_transaction(body: TransactionIn, request: Request, user: User =
     shift = await get_open_shift(user.id)
     if user.role == "kasir" and not shift:
         raise HTTPException(400, "Buka shift kasir terlebih dahulu")
-    items, total = await build_items(body.items, body.type)
+    items, subtotal = await build_items(body.items, body.type)
     remaining = remaining_items(bill.items_json, items) if body.partial else []
+    promo = {"code": None, "discount": 0}
+    pts = {"pointsRequired": 0, "discount": 0}
+    if body.promoCode or body.redeemPoints:
+        if not body.discountPin:
+            raise HTTPException(403, "Diskon & hadiah membutuhkan otorisasi PIN admin")
+        await check_pin(request, body.discountPin, "admin")
+        if body.promoCode:
+            promo = await promo_discount(body.promoCode, subtotal)
+        if body.redeemPoints:
+            pts = await points_discount(customer_id)
+    total = max(0, subtotal - promo["discount"] - pts["discount"])
     if body.method == "Cash" and body.cashGiven < total:
         raise HTTPException(400, "Uang tunai kurang dari total")
     cash = body.cashGiven if body.method == "Cash" else total
@@ -691,7 +706,8 @@ async def create_transaction(body: TransactionIn, request: Request, user: User =
         id=await next_id(f"TRX-{datetime.now(timezone.utc):%Y%m%d}", 4), date=now_iso(), type=body.type,
         method=body.method, tableId=table_id, customerId=customer_id, total=total, items_json=items,
         userId=user.id, userName=user.name, cashGiven=cash, change=cash - total, shiftId=shift["_id"] if shift else None,
-        waiterName=wname, waiterId=wid,
+        waiterName=wname, waiterId=wid, subtotal=subtotal, discount=subtotal - total, promoCode=promo["code"],
+        promoDiscount=promo["discount"], pointsRedeemed=pts["pointsRequired"], pointsDiscount=pts["discount"],
         tableName=table["name"] if table else "",
         customerName=customer["name"] if customer else (body.customerName or (bill.customerName if bill else "")),
     )
@@ -809,6 +825,7 @@ async def schema_counts(_: User = Depends(ADMIN)):
 app.include_router(api)
 app.include_router(shifts_router)
 app.include_router(targets_router)
+app.include_router(discounts_router)
 
 app.add_middleware(
     CORSMiddleware,

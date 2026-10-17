@@ -37,7 +37,7 @@ export default function Schema() {
 
   return (
     <div>
-      <PageHeader title="Skema Database" subtitle="10 koleksi inti + log void MongoDB beserta relasi PK/FK. Arahkan kursor ke tabel untuk menyorot relasinya." />
+      <PageHeader title="Skema Database" subtitle="10 tabel inti + tabel tambahan di Supabase (PostgreSQL) beserta relasi PK/FK. Arahkan kursor ke tabel untuk menyorot relasinya." />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" onMouseLeave={() => setFocus(null)}>
         {SCHEMA.map((s) => {
           const state = !focus ? "" : s.key === focus ? "border-primary ring-1 ring-primary" : rel.has(s.key) ? "border-sky-500/70" : "opacity-35";

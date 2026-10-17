@@ -1,0 +1,48 @@
+{
+  "summary": "Tested the Supabase-backed F&B POS end to end (backend API + UI). I found and fixed one critical backend bug: GET /api/transactions and GET /api/shifts returned 500, and waiter-shift lists failed too. Cause: rows whose userId was set to NULL by the FK rule ON DELETE SET NULL after TEST_ users were deleted. After that fix, these all passed: login and PIN error; all 15 admin pages; POS order types and Ojol prices; saving and voiding an open bill; the stock trigger (INV-001 -18, INV-010 -1, applied once); kasir opening a shift, Kas Masuk, blind close with selisih; kasir reduce-PIN prompt; waiter flows; table dialog and layout cancel; fullscreen. I also fixed a horizontal overflow on /pos at 800px portrait.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/transactions, GET /api/shifts, GET /api/waiter-shifts, /api/targets (admin)", "issue": "500 ValidationError 'userId Input should be a valid string' because Supabase FK 'on delete set null' nulls userId when a user is deleted (TRX-20261016-0014/15/18/19/20, SHIFT-20261016-002/004/005, WSHIFT-002/003, KAS-0001..0004). FIXED by T1: userId made Optional[str] in Transaction/Purchase/Expense/OpenBill (core.py), Shift/CashMovement (shifts.py), WaiterShift (targets.py).", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "all", "issue": "Each query to Supabase takes about 0.8s (simple GET /api/auth/users = 0.8s). Pages that run many sequential queries (e.g. /api/shifts runs summarize() for each open shift; create_transaction runs about 15 sequential queries) feel slow. Voiding a bill took more than 2.5s. Consider batching, or running SQL in a single connection/transaction."},
+      {"endpoint": "POST /api/transactions", "issue": "Not atomic. The transaction insert, open-bill delete, table mark_paid and order_logs writes are separate statements with no DB transaction. A failure halfway leaves inconsistent state (e.g. a transaction saved while its bill is still open)."},
+      {"endpoint": "CORS", "issue": "CORS_ORIGINS='*' with allow_credentials=True. Auth uses a Bearer token stored in localStorage, not httpOnly cookies."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "POS layout at 800px portrait", "issue": "Horizontal overflow (scrollWidth 959 > 800): the cart panel was cut off. FIXED by T1: grid columns changed to minmax(0,1fr) in POS.jsx line 134.", "selector": "[data-testid=cart-panel]", "priority": "HIGH"},
+      {"component": "Targets page (waiter)", "issue": "Shows 'Belum ada shift aktif.' (target-empty) for about 2-3s while /targets/progress is still loading, then shows the real progress. Needs a loading state.", "selector": "[data-testid=target-empty]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "POS 800x1280 portrait", "issues": ["Cart column is only 300px. Item names are truncated to 1-2 characters ('K...', 'C...') and the customer/waiter selects are clipped ('Pelanggan um', 'Tanpa pelayai'). Consider stacking the cart below the product grid, or a narrower product grid, in portrait tablet."]},
+      {"screen": "Schema page", "issues": ["Text still says 'MongoDB' after the Supabase migration."]},
+      {"screen": "POS/Login/Tables", "issues": ["The customer's real DB has many leftover TEST_ records visible to users: TEST_T1*/TEST_UI* products, TEST_T1/TESTCAT categories, TEST_AREA/TEST_ZONE table areas, and user TEST_UIUser (USR-007) on the login screen. Clean these up."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_supabase_readonly.py", "/app/test_reports/pytest/pytest_supabase.xml"],
+  "action_items": [
+    "Review T1 fix: userId Optional in models. Also consider whether other FK 'set null' columns (customerId, tableId, waiterId, shiftId) can break any required model fields.",
+    "Improve POS portrait-tablet (800px) cart layout: names are truncated.",
+    "Add a loading state on Targets so 'Belum ada shift aktif' is not shown while loading.",
+    "Reduce sequential Supabase round trips (about 0.8s each) and wrap create_transaction in a DB transaction.",
+    "Update the Schema page text that still says MongoDB.",
+    "Clean up the records created by T1 (listed in seed_data_creation), plus older TEST_ leftovers."
+  ],
+  "critical_code_review_comments": [
+    "pgdb.Collection has no multi-statement transaction support, so every server write flow is non-atomic.",
+    "server.py is 831 lines and should be split into routers.",
+    "consume_stock is now only a pre-check; the DB trigger does the actual decrement (verified to run once). The pre-check is not atomic with the trigger, but the stock>=0 CHECK constraint protects it.",
+    "core.py still imports motor/pymongo (ReturnDocument), which is unused now that the DB is Postgres."
+  ],
+  "updated_files": ["/app/backend/core.py", "/app/backend/shifts.py", "/app/backend/targets.py", "/app/frontend/src/pages/POS.jsx", "/app/backend/tests/test_supabase_readonly.py"],
+  "success_rate": {"backend": "100% after fix (23/23 read-only tests; 3 failed before: 2 real 500s plus 1 test param issue)", "frontend": "95%"},
+  "test_credentials": "From /app/memory/test_credentials.md: USR-ADMIN/1234, USR-KASIR/2222, USR-WAITER/3333. All work. PIN hashes are $2b$ bcrypt. One wrong PIN was used; login_attempts was cleared on the next successful login.",
+  "seed_data_creation": "Created by T1 (please clean up): BILL-078 (Takeaway TEST_Bill, 2x Americano) was voided, creating void log VOID-024 plus an order_logs void entry. TRX-20261016-0028 (Walk In Cash, TEST_Trx, 1x Americano Rp22.000, cashGiven 50000, shift SHIFT-20261016-003 of admin, plus an order_logs 'direct' entry). That transaction moved stock: INV-001 1820 -> 1802 and INV-010 475 -> 474. Kasir shift SHIFT-20261016-006 (opening 50000, now closed, counted 59000, difference -1000). Cash movement KAS-0005 (in, 10000, TEST_in). Counters were incremented. No layout saved, no users or PINs changed, the admin shift SHIFT-20261016-003 and waiter shift WSHIFT-007 were left open and untouched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "DB is the customer's real Supabase (DATABASE_URL in backend/.env); keep writes minimal and TEST_-prefixed. Existing tests in /app/backend/tests (test_pos_*.py, test_t1_*.py) WRITE data and delete users, which is what caused the null userId rows. Do NOT run them against Supabase. Use test_supabase_readonly.py instead. Supabase latency is about 0.8s per query, so use 3-5s waits in UI tests. The waiter USR-WAITER already had open shift WSHIFT-007, so start-waiter-shift-button was not shown (not tested). Open bills BILL-077 (Dine In, no table) and BILL-064 (Meja 3) are real data.",
+  "rca of the issue": "Deleting TEST users (likely from earlier test runs) triggered FK 'references users(id) on delete set null'. This set userId=NULL on their transactions/shifts/cash_movements/waiter_shifts. The Pydantic models declared userId: str, so from_mongo() raised a ValidationError for any list containing those rows, which returned 500. Mitigation applied: userId Optional[str]=None. Alternative: use ON DELETE RESTRICT, or soft-delete users."
+}

@@ -23,7 +23,7 @@ class SalesTarget(BaseDocument):
 
 
 class WaiterShift(BaseDocument):
-    userId: str
+    userId: Optional[str] = None
     userName: str
     openedAt: str
     status: str = "open"
