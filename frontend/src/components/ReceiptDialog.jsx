@@ -1,6 +1,6 @@
 import { Printer } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { fmtDate, rp } from "@/lib/api";
+import { fmtDate, itemName, rp } from "@/lib/api";
 
 const Row = ({ label, value, bold, testid }) => (
   <div className={`flex justify-between gap-4 ${bold ? "font-semibold" : ""}`}>
@@ -30,7 +30,7 @@ export const ReceiptDialog = ({ trx, onClose }) => (
           <div className="space-y-2">
             {trx.items_json.map((i, idx) => (
               <div key={idx}>
-                <div className="flex justify-between"><span>{i.productName}</span><span className="font-mono">{rp(i.price * i.qty)}</span></div>
+                <div className="flex justify-between"><span>{itemName(i)}</span><span className="font-mono">{rp(i.price * i.qty)}</span></div>
                 <p className="text-xs text-muted-foreground">{i.qty} × {rp(i.price)}{i.notes ? ` · ${i.notes}` : ""}</p>
               </div>
             ))}

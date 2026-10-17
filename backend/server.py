@@ -7,6 +7,7 @@ from seed import seed_all
 from shifts import router as shifts_router, get_open_shift
 from targets import router as targets_router, log_order_diff, resolve_waiter
 from discounts import router as discounts_router, promo_discount, points_discount
+from variants import router as variants_router, load_variants, check_materials, consume_materials, product_num
 
 import logging
 from collections import defaultdict
@@ -111,6 +112,7 @@ class OrderItemIn(BaseModel):
     productId: str
     qty: int = Field(gt=0)
     notes: str = ""
+    variantId: Optional[int] = None
 
 
 class OpenBillIn(BaseModel):
@@ -168,14 +170,20 @@ def unit_price(p: Product, order_type: str) -> float:
 async def build_items(items: List[OrderItemIn], order_type: str):
     ids = list({i.productId for i in items})
     prods = {d["_id"]: Product.from_mongo(d) async for d in db.products.find({"_id": {"$in": ids}})}
+    variants = await load_variants(list({i.variantId for i in items if i.variantId is not None}))
     out = []
     for i in items:
         p = prods.get(i.productId)
         if not p:
             raise HTTPException(404, f"Produk {i.productId} tidak ditemukan")
-        price = unit_price(p, order_type)
+        v = variants.get(i.variantId) if i.variantId is not None else None
+        if i.variantId is not None and (not v or v["menu_id"] != product_num(p.id)):
+            raise HTTPException(400, f"Varian #{i.variantId} tidak cocok untuk {p.name}")
+        extra = float(v.get("additional_price") or 0) if v else 0
+        price = unit_price(p, order_type) + extra
         out.append({"productId": p.id, "productName": p.name, "qty": i.qty, "price": price, "hpp": p.hpp,
-                    "notes": i.notes, "subtotal": price * i.qty})
+                    "notes": i.notes, "subtotal": price * i.qty, "variantId": i.variantId,
+                    "variantName": v["variant_name"] if v else "", "variantPrice": extra})
     return out, sum(x["subtotal"] for x in out)
 
 
@@ -534,6 +542,7 @@ async def get_open_bill(bid: str, _: User = Depends(ANY)):
 @api.post("/open-bills")
 async def create_open_bill(body: OpenBillIn, user: User = Depends(ANY)):
     bill = await compose_bill(body, user, await next_id("BILL"), now_iso())
+    await check_materials(bill.items_json)
     if bill.tableId:
         await occupy_table(bill.tableId, bill)
     await db.open_bills.insert_one(bill.to_mongo())
@@ -546,8 +555,8 @@ async def authorize_reduction(request: Request, user: User, bill: OpenBill, item
         return
     new_qty = defaultdict(int)
     for i in items:
-        new_qty[i.productId] += i.qty
-    reduced = [o["productName"] for o in bill.items_json if new_qty.get(o["productId"], 0) < o["qty"]]
+        new_qty[(i.productId, i.variantId)] += i.qty
+    reduced = [o["productName"] for o in bill.items_json if new_qty.get((o["productId"], o.get("variantId")), 0) < o["qty"]]
     if not reduced:
         return
     if not admin_pin:
@@ -560,6 +569,7 @@ async def update_open_bill(bid: str, body: OpenBillIn, request: Request, user: U
     old = OpenBill.from_mongo(await get_or_404("open_bills", bid, "Open bill"))
     await authorize_reduction(request, user, old, body.items, body.adminPin)
     bill = await compose_bill(body, user, bid, old.timestamp)
+    await check_materials(bill.items_json)
     bill.userId, bill.userName = old.userId, old.userName
     if bill.tableId:
         await occupy_table(bill.tableId, bill)
@@ -582,13 +592,15 @@ async def save_bill_items(bill: OpenBill, items: List[OrderItemIn]) -> OpenBill:
 def remaining_items(bill_items: List[dict], paid: List[dict]) -> List[OrderItemIn]:
     left, notes = defaultdict(int), {}
     for i in bill_items:
-        left[i["productId"]] += i["qty"]
-        notes[i["productId"]] = notes.get(i["productId"]) or i.get("notes", "")
+        k = (i["productId"], i.get("variantId"))
+        left[k] += i["qty"]
+        notes[k] = notes.get(k) or i.get("notes", "")
     for p in paid:
-        if left.get(p["productId"], 0) < p["qty"]:
+        k = (p["productId"], p.get("variantId"))
+        if left.get(k, 0) < p["qty"]:
             raise HTTPException(400, f"Jumlah {p['productName']} melebihi pesanan di bill")
-        left[p["productId"]] -= p["qty"]
-    return [OrderItemIn(productId=k, qty=v, notes=notes.get(k, "")) for k, v in left.items() if v > 0]
+        left[k] -= p["qty"]
+    return [OrderItemIn(productId=k[0], variantId=k[1], qty=v, notes=notes.get(k, "")) for k, v in left.items() if v > 0]
 
 
 @api.post("/open-bills/{bid}/void")
@@ -619,11 +631,12 @@ async def merge_open_bills(bid: str, body: MergeIn, _: User = Depends(ANY)):
     source = OpenBill.from_mongo(await get_or_404("open_bills", body.sourceBillId, "Open bill"))
     qty, notes = defaultdict(int), {}
     for i in target.items_json + source.items_json:
-        qty[i["productId"]] += i["qty"]
-        notes[i["productId"]] = notes.get(i["productId"]) or i.get("notes", "")
+        k = (i["productId"], i.get("variantId"))
+        qty[k] += i["qty"]
+        notes[k] = notes.get(k) or i.get("notes", "")
     await db.open_bills.delete_one({"_id": source.id})
     await free_table(source.tableId)
-    return await save_bill_items(target, [OrderItemIn(productId=k, qty=v, notes=notes[k]) for k, v in qty.items()])
+    return await save_bill_items(target, [OrderItemIn(productId=k[0], variantId=k[1], qty=v, notes=notes[k]) for k, v in qty.items()])
 
 
 @api.post("/open-bills/{bid}/move")
@@ -694,6 +707,7 @@ async def create_transaction(body: TransactionIn, request: Request, user: User =
     cash = body.cashGiven if body.method == "Cash" else total
 
     await consume_stock(await stock_needs(items))
+    mat_needs = await check_materials(items)
 
     if body.waiterId:
         wid, wname = await resolve_waiter(body.waiterId, "", user)
@@ -712,6 +726,7 @@ async def create_transaction(body: TransactionIn, request: Request, user: User =
         customerName=customer["name"] if customer else (body.customerName or (bill.customerName if bill else "")),
     )
     await db.transactions.insert_one(trx.to_mongo())
+    await consume_materials(items, mat_needs)
     if not body.partial:
         old_items, old_w = (bill.items_json, (bill.waiterId, bill.waiterName)) if bill else ([], (None, ""))
         await log_order_diff(old_items, old_w, items, (wid, wname), "payment" if bill else "direct", trx.id)
@@ -826,6 +841,7 @@ app.include_router(api)
 app.include_router(shifts_router)
 app.include_router(targets_router)
 app.include_router(discounts_router)
+app.include_router(variants_router)
 
 app.add_middleware(
     CORSMiddleware,

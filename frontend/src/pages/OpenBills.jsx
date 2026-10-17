@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowRight, Ban } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { api, errMsg, fmtDate, rp } from "@/lib/api";
+import { api, errMsg, fmtDate, itemName, rp } from "@/lib/api";
 import { PageHeader, Empty } from "@/components/PageHeader";
 import { AdminPinDialog } from "@/components/tables/AdminPinDialog";
 
@@ -42,7 +42,7 @@ export default function OpenBills() {
                 <span className="rounded-full bg-secondary px-2.5 py-1 text-xs">{b.type}{b.tableId ? ` · ${tables[b.tableId] || b.tableId}` : ""}</span>
               </div>
               <ul className="mt-4 flex-1 space-y-1 text-sm text-muted-foreground">
-                {b.items_json.map((i, idx) => <li key={idx} className="flex justify-between"><span>{i.qty}× {i.productName}</span><span className="font-mono">{rp(i.subtotal)}</span></li>)}
+                {b.items_json.map((i, idx) => <li key={idx} className="flex justify-between"><span>{i.qty}× {itemName(i)}</span><span className="font-mono">{rp(i.subtotal)}</span></li>)}
               </ul>
               <div className="mt-4 flex items-end justify-between border-t border-border pt-4">
                 <div className="text-xs text-muted-foreground">

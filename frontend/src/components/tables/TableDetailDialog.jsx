@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { PlusCircle, CreditCard, Split, Merge, MoveRight, Printer, ChefHat, Ban, Eraser, CalendarClock, Clock } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/context/AuthContext";
-import { api, errMsg, fmtDate, fmtTime, rp } from "@/lib/api";
+import { api, errMsg, fmtDate, fmtTime, itemKey, itemName, rp } from "@/lib/api";
 import { STATUS } from "@/components/tables/FloorCanvas";
 import { PayDialog } from "@/components/pos/PayDialog";
 import { SplitBillDialog } from "@/components/tables/SplitBillDialog";
@@ -34,8 +34,8 @@ const BillSummary = ({ bill }) => (
     </div>
     <div data-testid="table-detail-items" className="max-h-56 space-y-1.5 overflow-y-auto px-4 py-3 text-sm">
       {bill.items_json.map((i) => (
-        <div key={i.productId} className="flex justify-between gap-3">
-          <span>{i.qty}× {i.productName}{i.notes && <span className="text-xs text-muted-foreground"> · {i.notes}</span>}</span>
+        <div key={itemKey(i)} className="flex justify-between gap-3">
+          <span>{i.qty}× {itemName(i)}{i.notes && <span className="text-xs text-muted-foreground"> · {i.notes}</span>}</span>
           <span className="font-mono">{rp(i.subtotal)}</span>
         </div>
       ))}
@@ -80,7 +80,7 @@ export const TableDetailDialog = ({ table, tables, onClose, onChanged, onPaid })
     try {
       const { data } = await api.post("/transactions", {
         type: bill.type, tableId: bill.tableId, customerId: bill.customerId, customerName: bill.customerName, waiterName: bill.waiterName,
-        items: pay.items.map(({ productId, qty, notes }) => ({ productId, qty, notes })), method, cashGiven, openBillId: bill.id, partial: pay.partial, ...extra,
+        items: pay.items.map(({ productId, qty, notes, variantId }) => ({ productId, qty, notes, variantId: variantId ?? null })), method, cashGiven, openBillId: bill.id, partial: pay.partial, ...extra,
       });
       setPay(null);
       setMode(null);

@@ -1,0 +1,37 @@
+{
+  "summary": "Tested the new 'Diskon & Hadiah' feature (promo code + Tukar 100 Poin, both admin-PIN gated) against the real Supabase DB. Backend: 10/10 pytest pass. Covered promo valid/min-order/unknown/wrong PIN (one attempt)/no auth, points ok/insufficient/unknown, transaction without PIN -> 403, and a transaction with promo+points (totals, fields, loyalty trigger). Frontend: redeem disabled without customer; promo -> PIN dialog -> line + reduced total; remove restores; insufficient points shows PIN-dialog error; promo+points applied, remove/re-add points; one real payment; receipt shows receipt-promo/receipt-points; /pos 800x1280 has no horizontal overflow. No functional bugs found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/transactions (redeemPoints)", "issue": "Race: points are pre-checked in Python, then the DB trigger subtracts pointsRedeemed. If points drop between the check and the insert, the trigger raises 'Poin pelanggan tidak cukup' as a generic DB exception. That likely surfaces as 500, not 400. Map it to 400 (or deduct atomically with 'update ... where points >= required')."},
+      {"endpoint": "POST /api/transactions", "issue": "When customerId is set, body.customerName is ignored (UI-entered 'TEST_UIDisc' saved as 'TEST_Poin'). This is existing behaviour; confirm it is intended."},
+      {"endpoint": "Review-request data", "issue": "PRD-002 in the real DB is 'Kopi Susu Besar' Rp13.000, not Cafe Latte 28000. 2x = 26000 is correctly rejected by the TEST10 min order (400). Tests used 4x PRD-002 (52000) instead."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "PayDialog discount area", "issues": ["The customer's current points are not shown. 'Tukar 100 Poin' stays enabled for a customer with fewer than 100 points; the user only learns it is insufficient after entering the admin PIN. Show the points balance and disable the button when points < required_points.", "The admin PIN is asked again for each discount (promo, then points). This is acceptable but could reuse the PIN already authorised in the dialog."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_discounts_supabase.py", "/app/test_reports/pytest/pytest_discounts.xml"],
+  "action_items": [
+    "Optional: show customer points in PayDialog and disable 'Tukar 100 Poin' when points < required.",
+    "Optional: map the loyalty-trigger points exception to a 400, or deduct points atomically.",
+    "Clean up the T1 records listed in seed_data_creation. NOTE: real stock INV-002 'Susu Kental Manis' is now only 1 (204 used by the T1 API test transaction). Restore it if the customer wants it (it was 205)."
+  ],
+  "critical_code_review_comments": [
+    "discounts.promo_discount loads all active promos and matches the code in Python. Fine for small tables; a case-insensitive query would scale better.",
+    "Promo has no usage limit or per-customer limit. The spec doesn't require one.",
+    "create_transaction is still non-atomic (from iteration_1): transaction insert, bill delete and table updates are separate statements."
+  ],
+  "updated_files": ["/app/backend/tests/test_discounts_supabase.py"],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% of tested flows (waiter Targets page not tested: no known waiter PIN)"},
+  "test_credentials": "Admin USR-ADMIN/1234 works. USR-WAITER/USR-KASIR no longer exist. Current users: USR-001 KASIR PAGI (kasir), USR-002 ANI - IMRAN and USR-016 ANI - PUTRI (waiters). Their PINs are unknown and are not in /app/memory/test_credentials.md, which is out of date. Exactly 1 wrong admin PIN was used, followed by successful PIN checks.",
+  "seed_data_creation": "Created by T1: TRX-20261017-0005 (API; Walk In Cash, CUST-TEST1, 4x PRD-002, subtotal 52000, promo 5200, points 10000, total 36800. Stock used: INV-002 -204 -> 1 left, INV-001 -72 -> 898). TRX-20261017-0006 (UI; Walk In Cash, CUST-TEST1, 5x PRD-063 Ubi Goreng with no recipe, subtotal 50000, promo 5000, points 10000, total 35000). Plus their order_logs 'direct' entries and counter increments. CUST-TEST1 points were reset once via direct SQL from 53 back to 150 between the runs. Final state: points 53, visits 2, total_spent 71800. One UI attempt failed with a correct 400 (stock INV-002 insufficient), so no record was created for it.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Use tests/test_discounts_supabase.py (run with -n 0). Its last test CREATES a transaction and needs CUST-TEST1 >= 100 points and enough INV-002 stock: PRD-002 uses 51 INV-002 per unit and INV-002 is now 1, so that test will 400 on stock until it is restocked. Switch the product to PRD-063 (no recipe, 10000) x5 = 50000 if needed. CUST-TEST1 currently has 53 points. pytest.ini adds '-n --dist loadscope', so override with -n 0.",
+  "rca of the issue": "The UI payment's first attempt returned 400. Cause: real stock. INV-002 (Susu Kental Manis) only had 1 left after T1's API test consumed 204 (4x Kopi Susu Besar, recipe 51 each). The stock pre-check correctly rejected it. Retrying with a product that has no recipe succeeded. Not an app bug."
+}

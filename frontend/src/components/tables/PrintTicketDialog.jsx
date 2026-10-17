@@ -1,6 +1,6 @@
 import { Printer } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { fmtDate, rp } from "@/lib/api";
+import { fmtDate, itemName, rp } from "@/lib/api";
 
 export const PrintTicketDialog = ({ bill, tableName, mode, onClose }) => {
   const kitchen = mode === "kitchen";
@@ -20,9 +20,9 @@ export const PrintTicketDialog = ({ bill, tableName, mode, onClose }) => {
               {bill.items_json.map((i, idx) => (
                 <div key={idx}>
                   {kitchen ? (
-                    <p className="text-base font-semibold"><span className="font-mono">{i.qty}×</span> {i.productName}</p>
+                    <p className="text-base font-semibold"><span className="font-mono">{i.qty}×</span> {itemName(i)}</p>
                   ) : (
-                    <div className="flex justify-between"><span>{i.qty}× {i.productName}</span><span className="font-mono">{rp(i.subtotal)}</span></div>
+                    <div className="flex justify-between"><span>{i.qty}× {itemName(i)}</span><span className="font-mono">{rp(i.subtotal)}</span></div>
                   )}
                   {i.notes && <p className="pl-6 text-xs italic text-muted-foreground">Catatan: {i.notes}</p>}
                 </div>

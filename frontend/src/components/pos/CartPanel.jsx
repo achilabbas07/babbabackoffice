@@ -73,29 +73,29 @@ const OrderOptions = ({ order, setOrder, tables, customers, waiters, canPay }) =
 const CartLine = ({ item, price, locked, onQty, onNotes, onRemove }) => {
   const [editNote, setEditNote] = useState(false);
   return (
-    <div data-testid={`cart-item-${item.productId}`} className="rounded-lg border border-border px-2.5 py-1.5">
+    <div data-testid={`cart-item-${item.key}`} className="rounded-lg border border-border px-2.5 py-1.5">
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1 truncate text-[13px] font-semibold leading-tight">
-            {locked && <Lock data-testid={`cart-locked-${item.productId}`} className="h-3 w-3 shrink-0 text-amber-600" />}
+            {locked && <Lock data-testid={`cart-locked-${item.key}`} className="h-3 w-3 shrink-0 text-amber-600" />}
             <span className="truncate">{item.name}</span>
           </p>
           <p className="truncate font-mono text-[11px] text-muted-foreground">{rp(price)}{item.notes && !editNote ? ` · ${item.notes}` : ""}</p>
         </div>
-        <button data-testid={`cart-note-toggle-${item.productId}`} onClick={() => setEditNote((v) => !v)} title="Catatan"
+        <button data-testid={`cart-note-toggle-${item.key}`} onClick={() => setEditNote((v) => !v)} title="Catatan"
           className={`grid h-7 w-7 place-items-center rounded-md ${item.notes ? "text-primary" : "text-muted-foreground"} hover:bg-secondary`}>
           <StickyNote className="h-3.5 w-3.5" />
         </button>
         <div className="flex items-center rounded-md border border-border">
-          <button data-testid={`cart-dec-${item.productId}`} onClick={() => onQty(-1)} className="grid h-7 w-7 place-items-center"><Minus className="h-3 w-3" /></button>
-          <span data-testid={`cart-qty-${item.productId}`} className="w-6 text-center font-mono text-xs font-semibold">{item.qty}</span>
-          <button data-testid={`cart-inc-${item.productId}`} onClick={() => onQty(1)} className="grid h-7 w-7 place-items-center"><Plus className="h-3 w-3" /></button>
+          <button data-testid={`cart-dec-${item.key}`} onClick={() => onQty(-1)} className="grid h-7 w-7 place-items-center"><Minus className="h-3 w-3" /></button>
+          <span data-testid={`cart-qty-${item.key}`} className="w-6 text-center font-mono text-xs font-semibold">{item.qty}</span>
+          <button data-testid={`cart-inc-${item.key}`} onClick={() => onQty(1)} className="grid h-7 w-7 place-items-center"><Plus className="h-3 w-3" /></button>
         </div>
         <span className="w-[72px] text-right font-mono text-xs font-semibold">{rp(price * item.qty)}</span>
-        <button data-testid={`cart-remove-${item.productId}`} onClick={onRemove} className="text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
+        <button data-testid={`cart-remove-${item.key}`} onClick={onRemove} className="text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
       </div>
       {editNote && (
-        <input data-testid={`cart-notes-${item.productId}`} autoFocus value={item.notes} onChange={(e) => onNotes(e.target.value)}
+        <input data-testid={`cart-notes-${item.key}`} autoFocus value={item.notes} onChange={(e) => onNotes(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && setEditNote(false)} placeholder="Catatan (mis. less sugar)"
           className="mt-1.5 h-7 w-full rounded-md border border-border bg-transparent px-2 text-xs outline-none focus:border-primary" />
       )}
@@ -104,7 +104,7 @@ const CartLine = ({ item, price, locked, onQty, onNotes, onRemove }) => {
 };
 
 export const CartPanel = ({ order, setOrder, tables, customers, waiters, cart, setCart, priceOf, total, canPay, busy, onSaveBill, onPay, onReset, onQty, onRemove, isLocked }) => {
-  const notes = (id, v) => setCart((c) => c.map((i) => (i.productId === id ? { ...i, notes: v } : i)));
+  const notes = (id, v) => setCart((c) => c.map((i) => (i.key === id ? { ...i, notes: v } : i)));
   const canBill = !isDirectPay(order.type);
   const count = cart.reduce((s, i) => s + i.qty, 0);
 
@@ -124,7 +124,7 @@ export const CartPanel = ({ order, setOrder, tables, customers, waiters, cart, s
             <div><ShoppingBag className="mx-auto mb-2 h-7 w-7" />Ketuk menu untuk menambahkan</div>
           </div>
         ) : (
-          cart.map((i) => <CartLine key={i.productId} item={i} price={priceOf(i)} locked={isLocked(i)} onQty={(d) => onQty(i.productId, d)} onNotes={(v) => notes(i.productId, v)} onRemove={() => onRemove(i.productId)} />)
+          cart.map((i) => <CartLine key={i.key} item={i} price={priceOf(i)} locked={isLocked(i)} onQty={(d) => onQty(i.key, d)} onNotes={(v) => notes(i.key, v)} onRemove={() => onRemove(i.key)} />)
         )}
       </div>
       <div className="space-y-2.5 border-t border-border px-4 py-3">
