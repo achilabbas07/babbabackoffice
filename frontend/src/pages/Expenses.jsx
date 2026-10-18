@@ -8,10 +8,9 @@ import { ConfirmDelete } from "@/components/ConfirmDelete";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-const CATS = ["Operasional", "Gaji", "Utilitas", "Sewa", "Maintenance", "Marketing", "Lainnya"];
-const FIELDS = [
+const fieldsFor = (cats) => [
   { name: "date", label: "Tanggal", type: "date", required: true },
-  { name: "category", label: "Kategori", type: "select", options: CATS.map((c) => ({ value: c, label: c })) },
+  { name: "category_id", label: "Kategori Pengeluaran", type: "select", placeholder: "Pilih kategori", options: cats.map((c) => ({ value: c.id, label: c.name })) },
   { name: "description", label: "Keterangan", type: "textarea" },
   { name: "amount", label: "Jumlah (Rp)", type: "number", required: true },
 ];
@@ -19,13 +18,17 @@ const FIELDS = [
 export default function Expenses() {
   const [list, setList] = useState([]);
   const [open, setOpen] = useState(false);
+  const [cats, setCats] = useState([]);
   const load = useCallback(() => api.get("/expenses").then((r) => setList(r.data)).catch((e) => toast.error(errMsg(e))), []);
+  const loadCats = useCallback(() => api.get("/expense-categories").then((r) => setCats(r.data)).catch((e) => toast.error(errMsg(e))), []);
   useEffect(() => {
     load();
-  }, [load]);
+    loadCats();
+  }, [load, loadCats]);
 
   const save = async (f) => {
-    await api.post("/expenses", { date: dateToIso(f.date), category: f.category || "Operasional", description: f.description || "", amount: Number(f.amount) || 0 });
+    if (!f.category_id) throw new Error("Pilih kategori pengeluaran terlebih dahulu");
+    await api.post("/expenses", { date: dateToIso(f.date), category_id: Number(f.category_id), description: f.description || "", amount: Number(f.amount) || 0 });
     toast.success("Pengeluaran tercatat");
     load();
   };
@@ -59,7 +62,7 @@ export default function Expenses() {
           </Table>
         </div>
       )}
-      <FormDialog open={open} onOpenChange={setOpen} title="Catat Pengeluaran" fields={FIELDS} initial={open ? { date: todayStr(), category: "Operasional" } : null} onSubmit={save} testid="expense-form" />
+      <FormDialog open={open} onOpenChange={setOpen} title="Catat Pengeluaran" fields={fieldsFor(cats)} initial={open ? { date: todayStr(), category_id: null } : null} onSubmit={save} testid="expense-form" />
     </div>
   );
 }

@@ -150,7 +150,7 @@ class PurchaseIn(BaseModel):
 
 class ExpenseIn(BaseModel):
     date: Optional[str] = None
-    category: str = Field(min_length=1)
+    category_id: int
     description: str = ""
     amount: float = Field(gt=0)
 
@@ -770,10 +770,18 @@ async def list_expenses(_: User = Depends(ADMIN)):
     return [Expense.from_mongo(d) for d in await db.expenses.find().sort("date", -1).to_list(1000)]
 
 
+@api.get("/expense-categories")
+async def list_expense_categories(_: User = Depends(ADMIN)):
+    return [{"id": d["_id"], "name": d["name"]} for d in await db.expense_categories.find().sort("_id", 1).to_list(None)]
+
+
 @api.post("/expenses")
 async def create_expense(body: ExpenseIn, user: User = Depends(ADMIN)):
-    exp = Expense(id=await next_id("EXP"), date=to_utc_iso(body.date) if body.date else now_iso(), category=body.category,
-                  description=body.description, amount=body.amount, userId=user.id, userName=user.name)
+    cat = await db.expense_categories.find_one({"_id": body.category_id})
+    if not cat:
+        raise HTTPException(400, "Kategori pengeluaran tidak ditemukan")
+    exp = Expense(id=await next_id("EXP"), date=to_utc_iso(body.date) if body.date else now_iso(), category=cat["name"],
+                  category_id=cat["_id"], description=body.description, amount=body.amount, userId=user.id, userName=user.name)
     await db.expenses.insert_one(exp.to_mongo())
     return exp
 

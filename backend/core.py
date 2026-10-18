@@ -167,6 +167,7 @@ class Purchase(BaseDocument):
 class Expense(BaseDocument):
     date: str
     category: str
+    category_id: Optional[int] = None
     description: str = ""
     amount: float
     userId: Optional[str] = None

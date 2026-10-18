@@ -24,6 +24,8 @@ Latest request: "Lanjutkan implementasi kode berdasarkan tabel 'menu_variants', 
 
 - 2026-10-17: Variant display format changed to "Nama Menu Nama Varian" (no parentheses) across cart, receipt, kitchen ticket, open bills, table detail, split bill.
 
+- 2026-10-18: Expenses form uses "Kategori Pengeluaran" dropdown from Supabase `expense_categories` (GET /api/expense-categories). POST /api/expenses now takes `category_id` (int, validated) and stores both `category_id` and category name in `expenses`.
+
 ## Backlog
 - P1: Admin UI to manage variants / raw materials / variant ingredients (currently via Supabase dashboard).
 - P2: Purchases for raw_materials (restock flow).
