@@ -765,6 +765,23 @@ async def create_purchase(body: PurchaseIn, user: User = Depends(ADMIN)):
 
 
 # ---------- Expenses ----------
+class AppProfileIn(BaseModel):
+    app_name: str = Field(min_length=1, max_length=120)
+    logo_url: str = Field("", max_length=1000)
+
+
+@api.get("/app-profile")
+async def get_app_profile(_: User = Depends(ANY)):
+    d = await db.app_profile.find_one({"_id": 1}) or {}
+    return {"app_name": d.get("app_name") or "", "logo_url": d.get("logo_url") or ""}
+
+
+@api.put("/app-profile")
+async def update_app_profile(body: AppProfileIn, _: User = Depends(ADMIN)):
+    data = {"app_name": body.app_name.strip(), "logo_url": body.logo_url.strip()}
+    await db.app_profile.update_one({"_id": 1}, {"$set": data}, upsert=True)
+    return data
+
 @api.get("/expenses")
 async def list_expenses(_: User = Depends(ADMIN)):
     return [Expense.from_mongo(d) for d in await db.expenses.find().sort("date", -1).to_list(1000)]

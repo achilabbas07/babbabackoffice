@@ -1,6 +1,18 @@
 import { Printer } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { fmtDate, itemName, rp } from "@/lib/api";
+import { useProfile } from "@/context/ProfileContext";
+import { BrandLogo } from "@/components/BrandLogo";
+
+export const PrintHeader = ({ subtitle, testid }) => {
+  const { profile } = useProfile();
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      <BrandLogo url={profile.logo_url} className="h-12 w-12" iconClass="h-6 w-6" testid={`${testid}-logo`} />
+      <p data-testid={`${testid}-name`} className="font-bold">{profile.app_name || "Kedai POS"}{subtitle ? ` · ${subtitle}` : ""}</p>
+    </div>
+  );
+};
 
 const Row = ({ label, value, bold, testid }) => (
   <div className={`flex justify-between gap-4 ${bold ? "font-semibold" : ""}`}>
@@ -16,7 +28,7 @@ export const ReceiptDialog = ({ trx, onClose }) => (
       {trx && (
         <div className="print-area space-y-4 text-sm">
           <div className="text-center">
-            <p className="font-bold">Kedai POS</p>
+            <PrintHeader testid="receipt-header" />
             <p data-testid="receipt-id" className="font-mono text-xs text-muted-foreground">{trx.id}</p>
             <p className="text-xs text-muted-foreground">{fmtDate(trx.date)}</p>
           </div>

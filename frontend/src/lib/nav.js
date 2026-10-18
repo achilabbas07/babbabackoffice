@@ -1,5 +1,5 @@
 import {
-  ShoppingCart, LayoutGrid, ReceiptText, History, Users, UtensilsCrossed, Boxes, Truck, Wallet, BarChart3, UserCog, Database, Banknote, ClipboardList, Target,
+  ShoppingCart, LayoutGrid, ReceiptText, History, Users, UtensilsCrossed, Boxes, Truck, Wallet, BarChart3, UserCog, Database, Banknote, ClipboardList, Target, Store,
 } from "lucide-react";
 
 const ALL = ["admin", "kasir", "waiter"];
@@ -21,5 +21,6 @@ export const NAV = [
   { to: "/reports", label: "Laporan", icon: BarChart3, roles: ADMIN },
   { to: "/shifts", label: "Riwayat Shift", icon: ClipboardList, roles: ADMIN },
   { to: "/users", label: "Pengguna", icon: UserCog, roles: ADMIN },
+  { to: "/profile", label: "Profil Usaha", icon: Store, roles: ADMIN },
   { to: "/schema", label: "Skema Database", icon: Database, roles: ADMIN },
 ];

@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Coffee, LogOut, Maximize, Minimize } from "lucide-react";
+import { LogOut, Maximize, Minimize } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useProfile } from "@/context/ProfileContext";
+import { BrandLogo } from "@/components/BrandLogo";
 import { NAV } from "@/lib/nav";
 import { ROLE_LABEL } from "@/lib/api";
 import { ShiftGate } from "@/components/ShiftGate";
@@ -40,15 +42,18 @@ const FullscreenButton = () => {
   );
 };
 
-const Brand = ({ rail }) => (
-  <div className={`flex items-center gap-2.5 ${rail ? "md:justify-center 2xl:justify-start" : ""}`}>
-    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground"><Coffee className="h-5 w-5" /></span>
-    <div className={`leading-tight ${rail ? "md:hidden 2xl:block" : ""}`}>
-      <p className="font-bold tracking-tight">Kedai POS</p>
-      <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">F&amp;B System</p>
+const Brand = ({ rail }) => {
+  const { profile } = useProfile();
+  return (
+    <div className={`flex min-w-0 items-center gap-2.5 ${rail ? "md:justify-center 2xl:justify-start" : ""}`}>
+      <BrandLogo url={profile.logo_url} testid={rail ? "brand-logo" : "brand-logo-mobile"} />
+      <div className={`min-w-0 leading-tight ${rail ? "md:hidden 2xl:block" : ""}`}>
+        <p data-testid={rail ? "brand-name" : "brand-name-mobile"} className="max-w-[160px] truncate font-bold tracking-tight">{profile.app_name || "Kedai POS"}</p>
+        <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">F&amp;B System</p>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const NavItem = ({ to, label, icon: Icon, prefix }) => (
   <NavLink

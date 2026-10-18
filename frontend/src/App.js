@@ -20,11 +20,13 @@ import Schema from "@/pages/Schema";
 import Cash from "@/pages/Cash";
 import Shifts from "@/pages/Shifts";
 import Targets from "@/pages/Targets";
+import Profile from "@/pages/Profile";
+import { ProfileProvider } from "@/context/ProfileContext";
 
 const PAGES = {
   "/pos": POS, "/tables": Tables, "/open-bills": OpenBills, "/transactions": Transactions, "/customers": Customers,
   "/products": Products, "/inventory": Inventory, "/purchases": Purchases, "/expenses": Expenses, "/reports": Reports,
-  "/users": Users, "/schema": Schema, "/cash": Cash, "/shifts": Shifts, "/targets": Targets,
+  "/users": Users, "/schema": Schema, "/cash": Cash, "/shifts": Shifts, "/targets": Targets, "/profile": Profile,
 };
 
 const Protected = ({ roles, children }) => {
@@ -38,6 +40,7 @@ const Protected = ({ roles, children }) => {
 function App() {
   return (
     <AuthProvider>
+      <ProfileProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -50,6 +53,7 @@ function App() {
           <Route path="*" element={<Navigate to="/pos" replace />} />
         </Routes>
       </BrowserRouter>
+      </ProfileProvider>
       <Toaster theme="light" position="top-right" richColors />
     </AuthProvider>
   );

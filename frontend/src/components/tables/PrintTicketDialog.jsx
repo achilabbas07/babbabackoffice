@@ -1,6 +1,7 @@
 import { Printer } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { fmtDate, itemName, rp } from "@/lib/api";
+import { PrintHeader } from "@/components/ReceiptDialog";
 
 export const PrintTicketDialog = ({ bill, tableName, mode, onClose }) => {
   const kitchen = mode === "kitchen";
@@ -11,7 +12,7 @@ export const PrintTicketDialog = ({ bill, tableName, mode, onClose }) => {
         {bill && (
           <div className="print-area space-y-3 text-sm">
             <div className="text-center">
-              <p className="font-bold">{kitchen ? "ORDER DAPUR" : "Kedai POS · BILL"}</p>
+              <PrintHeader subtitle={kitchen ? "ORDER DAPUR" : "BILL"} testid={`print-${mode}-header`} />
               <p className="text-lg font-bold">{tableName || bill.type}</p>
               <p className="font-mono text-xs text-muted-foreground">{bill.id} · {fmtDate(new Date().toISOString())}</p>
               <p className="text-xs text-muted-foreground">Waiter: {bill.waiterName || "-"}{bill.customerName ? ` · ${bill.customerName}` : ""}</p>
