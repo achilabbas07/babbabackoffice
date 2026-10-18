@@ -4,12 +4,27 @@ import { fmtDate, itemName, rp } from "@/lib/api";
 import { useProfile } from "@/context/ProfileContext";
 import { BrandLogo } from "@/components/BrandLogo";
 
-export const PrintHeader = ({ subtitle, testid }) => {
-  const { profile } = useProfile();
+export const PrintHeader = ({ profile: override, testid }) => {
+  const ctx = useProfile().profile;
+  const profile = override || ctx;
   return (
-    <div className="flex flex-col items-center gap-1.5">
+    <div className="flex flex-col items-center gap-1 text-center">
       <BrandLogo url={profile.logo_url} className="h-12 w-12" iconClass="h-6 w-6" testid={`${testid}-logo`} />
-      <p data-testid={`${testid}-name`} className="font-bold">{profile.app_name || "Kedai POS"}{subtitle ? ` · ${subtitle}` : ""}</p>
+      <p data-testid={`${testid}-name`} className="mt-1 font-bold">{profile.app_name || "Kedai POS"}</p>
+      {profile.address && <p data-testid={`${testid}-address`} className="whitespace-pre-line text-xs text-muted-foreground">{profile.address}</p>}
+      {profile.phone && <p data-testid={`${testid}-phone`} className="text-xs text-muted-foreground">Telp. {profile.phone}</p>}
+    </div>
+  );
+};
+
+export const PrintFooter = ({ profile: override, paid }) => {
+  const ctx = useProfile().profile;
+  const profile = override || ctx;
+  if (!profile.additional_info && !paid) return null;
+  return (
+    <div data-testid="print-footer" className="space-y-1 border-t border-dashed border-border pt-3 text-center text-xs">
+      {profile.additional_info && <p data-testid="print-footer-info" className="whitespace-pre-line text-muted-foreground">{profile.additional_info}</p>}
+      {paid && <p data-testid="print-footer-thanks" className="font-semibold">Terima Kasih Atas Kunjungan Anda</p>}
     </div>
   );
 };
@@ -55,6 +70,7 @@ export const ReceiptDialog = ({ trx, onClose }) => (
             <Row label={`Bayar (${trx.method})`} value={rp(trx.cashGiven)} />
             <Row label="Kembalian" value={rp(trx.change)} testid="receipt-change" />
           </div>
+          <PrintFooter paid />
           <button
             data-testid="receipt-print-button"
             onClick={() => window.print()}

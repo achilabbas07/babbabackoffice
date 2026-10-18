@@ -1,7 +1,7 @@
 import { Printer } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { fmtDate, itemName, rp } from "@/lib/api";
-import { PrintHeader } from "@/components/ReceiptDialog";
+import { PrintHeader, PrintFooter } from "@/components/ReceiptDialog";
 
 export const PrintTicketDialog = ({ bill, tableName, mode, onClose }) => {
   const kitchen = mode === "kitchen";
@@ -12,7 +12,14 @@ export const PrintTicketDialog = ({ bill, tableName, mode, onClose }) => {
         {bill && (
           <div className="print-area space-y-3 text-sm">
             <div className="text-center">
-              <PrintHeader subtitle={kitchen ? "ORDER DAPUR" : "BILL"} testid={`print-${mode}-header`} />
+              {kitchen ? (
+                <p data-testid="print-kitchen-title" className="text-xl font-extrabold uppercase tracking-widest">ORDER DAPUR</p>
+              ) : (
+                <>
+                  <PrintHeader testid="print-bill-header" />
+                  <p className="mt-2 text-xs font-semibold uppercase tracking-[0.2em]">Bill</p>
+                </>
+              )}
               <p className="text-lg font-bold">{tableName || bill.type}</p>
               <p className="font-mono text-xs text-muted-foreground">{bill.id} · {fmtDate(new Date().toISOString())}</p>
               <p className="text-xs text-muted-foreground">Waiter: {bill.waiterName || "-"}{bill.customerName ? ` · ${bill.customerName}` : ""}</p>
@@ -33,6 +40,7 @@ export const PrintTicketDialog = ({ bill, tableName, mode, onClose }) => {
               <div className="flex justify-between font-semibold"><span>Total</span><span data-testid="print-bill-total" className="font-mono">{rp(bill.total)}</span></div>
             )}
             {!kitchen && <p className="text-center text-xs text-muted-foreground">Belum lunas · bukan bukti pembayaran</p>}
+            {!kitchen && <PrintFooter />}
             <button
               data-testid={`print-${mode}-button`}
               onClick={() => window.print()}

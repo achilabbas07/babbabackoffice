@@ -28,6 +28,8 @@ Latest request: "Lanjutkan implementasi kode berdasarkan tabel 'menu_variants', 
 
 - 2026-10-18: Profil Usaha page (/profile, admin) edits `app_profile` (id=1: app_name, logo_url) via GET/PUT /api/app-profile. Header/sidebar brand, receipt (Struk), Bill and Kitchen ticket headers use profile name + logo (Coffee icon fallback when empty/broken).
 
+- 2026-10-18: Profil Usaha extended: address, phone, additional_info. Receipt (paid) header: logo, name, address, phone; footer: additional_info + "Terima Kasih Atas Kunjungan Anda". Unpaid Bill print: same header + additional_info (no thank-you). Kitchen ticket header only "ORDER DAPUR" (bold uppercase).
+
 ## Backlog
 - P1: Admin UI to manage variants / raw materials / variant ingredients (currently via Supabase dashboard).
 - P2: Purchases for raw_materials (restock flow).

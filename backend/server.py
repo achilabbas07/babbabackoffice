@@ -768,17 +768,23 @@ async def create_purchase(body: PurchaseIn, user: User = Depends(ADMIN)):
 class AppProfileIn(BaseModel):
     app_name: str = Field(min_length=1, max_length=120)
     logo_url: str = Field("", max_length=1000)
+    address: str = Field("", max_length=500)
+    phone: str = Field("", max_length=50)
+    additional_info: str = Field("", max_length=1000)
+
+
+PROFILE_FIELDS = ("app_name", "logo_url", "address", "phone", "additional_info")
 
 
 @api.get("/app-profile")
 async def get_app_profile(_: User = Depends(ANY)):
     d = await db.app_profile.find_one({"_id": 1}) or {}
-    return {"app_name": d.get("app_name") or "", "logo_url": d.get("logo_url") or ""}
+    return {k: d.get(k) or "" for k in PROFILE_FIELDS}
 
 
 @api.put("/app-profile")
 async def update_app_profile(body: AppProfileIn, _: User = Depends(ADMIN)):
-    data = {"app_name": body.app_name.strip(), "logo_url": body.logo_url.strip()}
+    data = {k: getattr(body, k).strip() for k in PROFILE_FIELDS}
     await db.app_profile.update_one({"_id": 1}, {"$set": data}, upsert=True)
     return data
 
