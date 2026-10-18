@@ -67,12 +67,12 @@ export default function POS() {
     const key = `${p.id}:${v ? v.id : ""}`;
     const inCart = cart.find((i) => i.key === key)?.qty || 0;
     if (v && v.available != null && inCart + 1 > v.available) {
-      toast.error(`Stok bahan baku untuk ${p.name} (${v.variant_name}) tidak cukup${v.available > 0 ? `, maksimal ${v.available}` : " / habis"}`);
+      toast.error(`Stok bahan baku untuk ${p.name} ${v.variant_name} tidak cukup${v.available > 0 ? `, maksimal ${v.available}` : " / habis"}`);
       return;
     }
     setCart((c) => (c.some((i) => i.key === key)
       ? c.map((i) => (i.key === key ? { ...i, qty: i.qty + 1 } : i))
-      : [...c, { key, productId: p.id, variantId: v ? v.id : null, extra: v ? Number(v.additional_price || 0) : 0, name: v ? `${p.name} (${v.variant_name})` : p.name, price: p.price, qty: 1, notes: "" }]));
+      : [...c, { key, productId: p.id, variantId: v ? v.id : null, extra: v ? Number(v.additional_price || 0) : 0, name: v ? `${p.name} ${v.variant_name}` : p.name, price: p.price, qty: 1, notes: "" }]));
   };
   const menuIdOf = (p) => parseInt(String(p.id).replace(/^PRD-/i, "").replace(/\D/g, ""), 10);
   const variantsOf = (p) => variants.filter((v) => v.menu_id === menuIdOf(p));

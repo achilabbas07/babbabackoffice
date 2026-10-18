@@ -34,7 +34,7 @@ const rpFmt = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR
 const numFmt = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 });
 export const rp = (v) => rpFmt.format(v || 0);
 export const num = (v) => numFmt.format(v || 0);
-export const itemName = (i) => (i.variantName ? `${i.productName} (${i.variantName})` : i.productName);
+export const itemName = (i) => (i.variantName ? `${i.productName} ${i.variantName}` : i.productName);
 export const itemKey = (i) => `${i.productId}:${i.variantId ?? ""}`;
 export const fmtDate = (iso) => (iso ? new Date(iso).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }) : "-");
 export const fmtTime = (iso) => (iso ? new Date(iso).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "-");

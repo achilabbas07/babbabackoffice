@@ -22,6 +22,8 @@ Latest request: "Lanjutkan implementasi kode berdasarkan tabel 'menu_variants', 
 
 - 2026-10-17: Variants fetched per clicked product: frontend strips "PRD-" → integer, calls `GET /api/menu-variants?menu_id=<int>`. Note: Supabase row variant id=34 currently has menu_id=10 (Aneka Kue), not 34 (Kentang Goreng) — user data needs correction.
 
+- 2026-10-17: Variant display format changed to "Nama Menu Nama Varian" (no parentheses) across cart, receipt, kitchen ticket, open bills, table detail, split bill.
+
 ## Backlog
 - P1: Admin UI to manage variants / raw materials / variant ingredients (currently via Supabase dashboard).
 - P2: Purchases for raw_materials (restock flow).
