@@ -782,6 +782,12 @@ async def get_app_profile(_: User = Depends(ANY)):
     return {k: d.get(k) or "" for k in PROFILE_FIELDS}
 
 
+@api.get("/app-profile/branding")
+async def get_app_branding():
+    d = await db.app_profile.find_one({"_id": 1}) or {}
+    return {"app_name": d.get("app_name") or "", "logo_url": d.get("logo_url") or ""}
+
+
 @api.put("/app-profile")
 async def update_app_profile(body: AppProfileIn, _: User = Depends(ADMIN)):
     data = {k: getattr(body, k).strip() for k in PROFILE_FIELDS}

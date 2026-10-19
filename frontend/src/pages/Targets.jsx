@@ -16,6 +16,7 @@ const WaiterView = () => {
   const { refresh } = useShift();
   const [progress, setProgress] = useState(null);
   const [result, setResult] = useState(null);
+  const [confirm, setConfirm] = useState(false);
 
   useEffect(() => {
     api.get("/targets/progress").then((r) => setProgress(r.data)).catch((e) => toast.error(errMsg(e)));

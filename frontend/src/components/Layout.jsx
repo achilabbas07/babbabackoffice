@@ -43,12 +43,12 @@ const FullscreenButton = () => {
 };
 
 const Brand = ({ rail }) => {
-  const { profile } = useProfile();
+  const { profile, appName } = useProfile();
   return (
     <div className={`flex min-w-0 items-center gap-2.5 ${rail ? "md:justify-center 2xl:justify-start" : ""}`}>
       <BrandLogo url={profile.logo_url} testid={rail ? "brand-logo" : "brand-logo-mobile"} />
       <div className={`min-w-0 leading-tight ${rail ? "md:hidden 2xl:block" : ""}`}>
-        <p data-testid={rail ? "brand-name" : "brand-name-mobile"} className="max-w-[160px] truncate font-bold tracking-tight">{profile.app_name || "Kedai POS"}</p>
+        <p data-testid={rail ? "brand-name" : "brand-name-mobile"} className="max-w-[160px] truncate font-bold tracking-tight">{appName}</p>
         <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">F&amp;B System</p>
       </div>
     </div>

@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { Delete, Coffee, Lock, ArrowLeft, UserRound } from "lucide-react";
+import { Delete, Lock, ArrowLeft, UserRound } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useProfile } from "@/context/ProfileContext";
+import { BrandLogo } from "@/components/BrandLogo";
 import { api, errMsg, ROLE_LABEL } from "@/lib/api";
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "clear", "0", "back"];
@@ -81,6 +83,7 @@ const PinPad = ({ selected, onBack, onSubmit }) => {
 
 export default function Login() {
   const { user, login } = useAuth();
+  const brand = useProfile();
   const [users, setUsers] = useState([]);
   const [selected, setSelected] = useState(null);
 
@@ -89,6 +92,7 @@ export default function Login() {
   }, []);
 
   if (user) return <Navigate to="/pos" replace />;
+  const { profile, appName } = brand;
 
   return (
     <div className="grid min-h-screen lg:grid-cols-[1fr_1.1fr]">
@@ -104,9 +108,9 @@ export default function Login() {
       <div className="flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md fade-up">
           <div className="mb-8 flex items-center gap-3">
-            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-primary text-primary-foreground"><Coffee className="h-5 w-5" /></span>
-            <div>
-              <p className="text-xl font-bold">Kedai POS</p>
+            <BrandLogo url={profile.logo_url} className="h-11 w-11" testid="login-brand-logo" />
+            <div className="min-w-0">
+              <p data-testid="login-brand-name" className="truncate text-xl font-bold">{appName}</p>
               <p className="text-sm text-muted-foreground">{selected ? "Masukkan PIN Anda" : "Pilih nama pengguna"}</p>
             </div>
           </div>

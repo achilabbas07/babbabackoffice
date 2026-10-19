@@ -33,3 +33,9 @@ Latest request: "Lanjutkan implementasi kode berdasarkan tabel 'menu_variants', 
 ## Backlog
 - P1: Admin UI to manage variants / raw materials / variant ingredients (currently via Supabase dashboard).
 - P2: Purchases for raw_materials (restock flow).
+
+## 2026-10-19 — Dynamic Branding
+- Endpoint publik `GET /api/app-profile/branding` (app_name, logo_url) untuk halaman Login sebelum login.
+- ProfileContext memuat branding saat aplikasi dibuka; `document.title` mengikuti nama usaha; fallback "POS Warkop Babba" + ikon logo bawaan.
+- Login & Header (desktop/mobile) memakai nama + logo dari database. Diverifikasi via screenshot (tanpa testing agent sesuai permintaan user).
+
