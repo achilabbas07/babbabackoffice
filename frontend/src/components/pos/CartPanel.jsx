@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Minus, Plus, X, Save, CreditCard, ShoppingBag, StickyNote, Lock } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { rp } from "@/lib/api";
+import { CustomerCombobox } from "@/components/pos/CustomerCombobox";
 
 export const ORDER_TYPES = [
   { id: "Dine In", label: "Dine In", testid: "dine-in" },
@@ -44,16 +45,11 @@ const OrderOptions = ({ order, setOrder, tables, customers, waiters, canPay }) =
             {freeTables.map((t) => <SelectItem key={t.id} value={t.id}>{t.name} · {t.area}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Select
+        <CustomerCombobox
           value={order.customerId}
-          onValueChange={(v) => set({ customerId: v, customerName: v === "none" ? "" : customers.find((c) => c.id === v)?.name || "" })}
-        >
-          <SelectTrigger data-testid="order-customer-select" className="h-9"><SelectValue placeholder="Pelanggan" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">Pelanggan umum</SelectItem>
-            {customers.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
+          customers={customers}
+          onChange={(v) => set({ customerId: v, customerName: v === "none" ? "" : customers.find((c) => c.id === v)?.name || "" })}
+        />
       </div>
       <div className="grid grid-cols-2 gap-2">
         <input data-testid="order-customer-name-input" value={order.customerName} onChange={(e) => set({ customerName: e.target.value })}

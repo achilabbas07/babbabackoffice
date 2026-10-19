@@ -59,6 +59,10 @@ Latest request: "Lanjutkan implementasi kode berdasarkan tabel 'menu_variants', 
 - Modal Kas Keluar (Kas & Shift) punya dropdown wajib "Kategori Pengeluaran" dari tabel expense_categories; payload POST /api/shifts/cash-movements menyertakan expense_category_id (wajib untuk type=out, divalidasi backend). Kas Masuk & rumus saldo shift tidak diubah.
 - GET /api/expense-categories kini bisa diakses admin + kasir.
 
+## 2026-10-19 — Pencarian pelanggan di Kasir
+- Dropdown Pelanggan di keranjang diganti combobox bisa dicari (CustomerCombobox.jsx; cari nama/no. HP).
+
+
 
 
 
