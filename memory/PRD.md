@@ -62,6 +62,11 @@ Latest request: "Lanjutkan implementasi kode berdasarkan tabel 'menu_variants', 
 ## 2026-10-19 — Pencarian pelanggan di Kasir
 - Dropdown Pelanggan di keranjang diganti combobox bisa dicari (CustomerCombobox.jsx; cari nama/no. HP).
 
+## 2026-10-19 — Halaman Pelanggan 2 kolom
+- Layout 70/30 (lg:grid-cols-[7fr_3fr]); kiri tabel lama tanpa perubahan fungsi, kanan card "10 Pelanggan Terbaik" (TopCustomers.jsx).
+- `GET /api/customers/top`: total_spent > 0, ORDER BY total_spent DESC, points DESC, LIMIT 10 (read-only). Di HP card turun ke bawah tabel.
+
+
 
 
 

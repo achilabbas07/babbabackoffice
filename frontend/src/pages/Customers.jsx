@@ -4,6 +4,7 @@ import { Plus, Pencil, Search, Star } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api, errMsg, rp } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
+import { TopCustomers } from "@/components/TopCustomers";
 import { FormDialog } from "@/components/FormDialog";
 import { ConfirmDelete } from "@/components/ConfirmDelete";
 import { Button } from "@/components/ui/button";
@@ -43,7 +44,8 @@ export default function Customers() {
         </div>
         <Button data-testid="add-customer-button" onClick={() => setDialog({})}><Plus className="mr-1 h-4 w-4" />Tambah</Button>
       </PageHeader>
-      <div className="overflow-x-auto rounded-2xl border border-border bg-card">
+      <div className="grid items-start gap-6 lg:grid-cols-[7fr_3fr]">
+      <div className="min-w-0 overflow-x-auto rounded-2xl border border-border bg-card">
         <Table>
           <TableHeader><TableRow><TableHead>Nama</TableHead><TableHead>Kontak</TableHead><TableHead className="text-right">Poin</TableHead><TableHead className="text-right">Kunjungan</TableHead><TableHead className="text-right">Total belanja</TableHead><TableHead /></TableRow></TableHeader>
           <TableBody>
@@ -64,6 +66,8 @@ export default function Customers() {
             ))}
           </TableBody>
         </Table>
+      </div>
+      <TopCustomers refreshKey={list} />
       </div>
       <FormDialog open={!!dialog} onOpenChange={(o) => !o && setDialog(null)} title={dialog?.id ? "Edit Pelanggan" : "Tambah Pelanggan"} fields={FIELDS} initial={dialog} onSubmit={save} testid="customer-form" />
     </div>

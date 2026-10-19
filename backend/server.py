@@ -494,6 +494,12 @@ async def list_customers(_: User = Depends(ANY)):
     return [Customer.from_mongo(d) for d in await db.customers.find().sort("name", 1).to_list(None)]
 
 
+@api.get("/customers/top")
+async def top_customers(_: User = Depends(ANY)):
+    docs = await db.customers.find({"total_spent": {"$gt": 0}}).sort([("total_spent", -1), ("points", -1)]).to_list(10)
+    return [Customer.from_mongo(d) for d in docs]
+
+
 @api.post("/customers")
 async def create_customer(body: CustomerIn, _: User = Depends(STAFF)):
     c = Customer(id=await next_id("CUST"), **body.model_dump())
