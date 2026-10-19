@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Pencil, ChefHat, UtensilsCrossed } from "lucide-react";
+import { Plus, Pencil, ChefHat, UtensilsCrossed, Layers } from "lucide-react";
+import { VariantAdminDialog } from "@/components/VariantAdminDialog";
 import { api, errMsg, rp, PRODUCT_TYPE_LABEL } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { FormDialog } from "@/components/FormDialog";
@@ -15,6 +16,7 @@ export default function Products() {
   const [recipes, setRecipes] = useState([]);
   const [dialog, setDialog] = useState(null);
   const [recipeFor, setRecipeFor] = useState(null);
+  const [variantOpen, setVariantOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -54,7 +56,9 @@ export default function Products() {
 
   return (
     <div>
+      <VariantAdminDialog open={variantOpen} products={products} onClose={() => setVariantOpen(false)} />
       <PageHeader title="Produk & Resep" subtitle="HPP dihitung otomatis dari resep (qty bahan × biaya per unit).">
+        <Button data-testid="add-variant-button" variant="outline" onClick={() => setVariantOpen(true)}><Layers className="mr-1 h-4 w-4" />Tambah Varian</Button>
         <Button data-testid="add-product-button" onClick={() => setDialog({ type: "both", hpp: 0, price_ojol: 0 })}><Plus className="mr-1 h-4 w-4" />Tambah Produk</Button>
       </PageHeader>
       <div className="overflow-x-auto rounded-2xl border border-border bg-card">

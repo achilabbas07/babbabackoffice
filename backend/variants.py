@@ -4,11 +4,50 @@ from collections import defaultdict
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 from core import User, db, now_iso, require_roles
 
 router = APIRouter(prefix="/api")
 ANY = require_roles("admin", "kasir", "waiter")
+ADMIN = require_roles("admin")
+
+
+class IngredientIn(BaseModel):
+    material_id: int
+    qty_needed: int = Field(gt=0)
+
+
+class VariantIn(BaseModel):
+    product_id: str = Field(min_length=1)
+    variant_name: str = Field(min_length=1, max_length=100)
+    additional_price: int = Field(0, ge=0)
+    ingredients: List[IngredientIn] = Field(min_length=1)
+
+
+@router.get("/raw-materials")
+async def list_raw_materials(_: User = Depends(ADMIN)):
+    rows = await db.raw_materials.find().sort("_id", 1).to_list(None)
+    return [{"id": r["_id"], "material_name": r["material_name"], "stock": r.get("stock") or 0} for r in rows]
+
+
+@router.post("/menu-variants")
+async def create_menu_variant(body: VariantIn, _: User = Depends(ADMIN)):
+    if not await db.products.find_one({"_id": body.product_id}):
+        raise HTTPException(404, "Menu tidak ditemukan")
+    mids = list({i.material_id for i in body.ingredients})
+    if len(mids) != len(body.ingredients):
+        raise HTTPException(400, "Bahan baku yang sama dipilih lebih dari sekali")
+    if await db.raw_materials.count_documents({"_id": {"$in": mids}}) != len(mids):
+        raise HTTPException(400, "Ada bahan baku yang tidak ditemukan")
+    await db.connect()
+    async with db.pool.acquire() as con, con.transaction():
+        vid = await con.fetchval("insert into menu_variants (product_id, variant_name, additional_price) values ($1, $2, $3) returning id",
+                                 body.product_id, body.variant_name.strip(), body.additional_price)
+        for i in body.ingredients:
+            await con.execute("insert into variant_ingredients (variant_id, material_id, qty_needed) values ($1, $2, $3)", vid, i.material_id, i.qty_needed)
+    return {"id": vid, "product_id": body.product_id, "variant_name": body.variant_name.strip(),
+            "additional_price": body.additional_price, "ingredients": [i.model_dump() for i in body.ingredients]}
 
 
 def product_num(product_id) -> int:

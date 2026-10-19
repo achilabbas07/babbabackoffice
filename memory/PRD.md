@@ -44,4 +44,9 @@ Latest request: "Lanjutkan implementasi kode berdasarkan tabel 'menu_variants', 
 - Checkout: item tanpa variantId → logika stok lama (cek resep + trigger transactions_consume_stock). Item dengan variantId → dilewati dari logika lama (trigger transaksi di-skip untuk variantId), lalu INSERT order_logs (source=variant_sale, variant_id) → trigger `kurangi_stok_bahan` memotong raw_materials.
 - Skrip trigger: backend/scripts/variant_stock_bypass.py; cek e2e: backend/tests/variant_checkout_check.py (data TEST dibersihkan otomatis).
 
+## 2026-10-19 — Admin - Tambah Varian
+- Tombol "Tambah Varian" di halaman Produk & Resep → modal `VariantAdminDialog.jsx` (pilih menu, nama varian, harga tambahan, baris bahan baku dinamis + "Tambah Bahan").
+- Backend: `GET /api/raw-materials`, `POST /api/menu-variants` (admin) — INSERT menu_variants RETURNING id lalu loop INSERT variant_ingredients dalam satu transaksi Postgres (gagal = semua dibatalkan).
+
+
 
