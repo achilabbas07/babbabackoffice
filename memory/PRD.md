@@ -55,5 +55,10 @@ Latest request: "Lanjutkan implementasi kode berdasarkan tabel 'menu_variants', 
 - Keranjang: tampilkan variantName saja bila ada, selain itu nama produk (hanya tampilan; payload checkout tidak berubah).
 - PENDING (user): ubah tipe variant_ingredients.inventory_id dari bigint → text (ID inventory = 'INV-xxx'), lalu uji simpan varian + checkout varian.
 
+## 2026-10-19 — Kategori di Kas Keluar
+- Modal Kas Keluar (Kas & Shift) punya dropdown wajib "Kategori Pengeluaran" dari tabel expense_categories; payload POST /api/shifts/cash-movements menyertakan expense_category_id (wajib untuk type=out, divalidasi backend). Kas Masuk & rumus saldo shift tidak diubah.
+- GET /api/expense-categories kini bisa diakses admin + kasir.
+
+
 
 

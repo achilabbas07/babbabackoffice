@@ -18,6 +18,13 @@ export default function Cash() {
   const [moves, setMoves] = useState([]);
   const [dialog, setDialog] = useState(null);
   const [closing, setClosing] = useState(false);
+  const [categories, setCategories] = useState([]);
+
+  useEffect(() => {
+    if (dialog === "out") {
+      api.get("/expense-categories").then((r) => setCategories(r.data)).catch((e) => toast.error(errMsg(e)));
+    }
+  }, [dialog]);
 
   const load = useCallback(() => {
     if (shift) api.get("/shifts/current/movements").then((r) => setMoves(r.data)).catch((e) => toast.error(errMsg(e)));
@@ -37,8 +44,12 @@ export default function Cash() {
 
   const cin = moves.filter((m) => m.type === "in").reduce((s, m) => s + m.amount, 0);
   const cout = moves.filter((m) => m.type === "out").reduce((s, m) => s + m.amount, 0);
+  const outFields = [{ name: "expense_category_id", label: "Kategori Pengeluaran", type: "select", placeholder: "Pilih kategori", options: categories.map((c) => ({ value: c.id, label: c.name })) }, ...FIELDS];
   const save = async (f) => {
-    await api.post("/shifts/cash-movements", { type: dialog, amount: Number(f.amount) || 0, note: f.note || "" });
+    if (dialog === "out" && !f.expense_category_id) throw new Error("Kategori pengeluaran wajib dipilih");
+    const body = { type: dialog, amount: Number(f.amount) || 0, note: f.note || "" };
+    if (dialog === "out") body.expense_category_id = Number(f.expense_category_id);
+    await api.post("/shifts/cash-movements", body);
     toast.success(dialog === "in" ? "Kas masuk tercatat" : "Kas keluar tercatat");
     load();
   };
@@ -69,7 +80,7 @@ export default function Cash() {
           ))}
         </div>
       )}
-      <FormDialog open={!!dialog} onOpenChange={(o) => !o && setDialog(null)} title={dialog === "in" ? "Kas Masuk" : "Kas Keluar"} fields={FIELDS} initial={dialog ? {} : null} onSubmit={save} testid="cash-form" />
+      <FormDialog open={!!dialog} onOpenChange={(o) => !o && setDialog(null)} title={dialog === "in" ? "Kas Masuk" : "Kas Keluar"} fields={dialog === "out" ? outFields : FIELDS} initial={dialog ? {} : null} onSubmit={save} testid="cash-form" />
       <CloseShiftDialog open={closing} onOpenChange={setClosing} onClosed={refresh} />
     </div>
   );

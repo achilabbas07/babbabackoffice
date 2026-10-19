@@ -10,8 +10,9 @@ import { errMsg } from "@/lib/api";
 
 const Field = ({ f, value, onChange, testid }) => {
   if (f.type === "select") {
+    const empty = value === null || value === undefined || value === "";
     return (
-      <Select value={value === null || value === undefined || value === "" ? "none" : String(value)} onValueChange={(v) => onChange(v === "none" ? null : v)}>
+      <Select value={empty ? (f.allowNone ? "none" : undefined) : String(value)} onValueChange={(v) => onChange(v === "none" ? null : v)}>
         <SelectTrigger data-testid={testid}><SelectValue placeholder={f.placeholder || "Pilih"} /></SelectTrigger>
         <SelectContent>
           {f.allowNone && <SelectItem value="none">{f.noneLabel || "— Tidak ada —"}</SelectItem>}

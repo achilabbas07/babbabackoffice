@@ -802,7 +802,7 @@ async def list_expenses(_: User = Depends(ADMIN)):
 
 
 @api.get("/expense-categories")
-async def list_expense_categories(_: User = Depends(ADMIN)):
+async def list_expense_categories(_: User = Depends(STAFF)):
     return [{"id": d["_id"], "name": d["name"]} for d in await db.expense_categories.find().sort("_id", 1).to_list(None)]
 
 

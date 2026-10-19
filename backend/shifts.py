@@ -37,6 +37,7 @@ class CashMovement(BaseDocument):
     amount: float
     note: str = ""
     timestamp: str
+    expense_category_id: Optional[int] = None
 
 
 class OpenShiftIn(BaseModel):
@@ -47,6 +48,7 @@ class MovementIn(BaseModel):
     type: Literal["in", "out"]
     amount: float = Field(gt=0)
     note: str = Field(min_length=1)
+    expense_category_id: Optional[int] = None
 
 
 class CloseShiftIn(BaseModel):
@@ -108,8 +110,15 @@ async def current_movements(user: User = Depends(STAFF)):
 @router.post("/shifts/cash-movements")
 async def add_movement(body: MovementIn, user: User = Depends(STAFF)):
     shift = await require_open_shift(user)
+    cat_id = None
+    if body.type == "out":
+        if body.expense_category_id is None:
+            raise HTTPException(400, "Kategori pengeluaran wajib dipilih")
+        if not await db.expense_categories.find_one({"_id": body.expense_category_id}):
+            raise HTTPException(400, "Kategori pengeluaran tidak ditemukan")
+        cat_id = body.expense_category_id
     mov = CashMovement(id=await next_id("KAS", 4), shiftId=shift["_id"], userId=user.id, userName=user.name,
-                       type=body.type, amount=body.amount, note=body.note, timestamp=now_iso())
+                       type=body.type, amount=body.amount, note=body.note, timestamp=now_iso(), expense_category_id=cat_id)
     await db.cash_movements.insert_one(mov.to_mongo())
     return mov
 
