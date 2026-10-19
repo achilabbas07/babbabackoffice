@@ -74,13 +74,11 @@ export default function POS() {
       ? c.map((i) => (i.key === key ? { ...i, qty: i.qty + 1 } : i))
       : [...c, { key, productId: p.id, variantId: v ? v.id : null, extra: v ? Number(v.additional_price || 0) : 0, name: v ? `${p.name} ${v.variant_name}` : p.name, price: p.price, qty: 1, notes: "" }]));
   };
-  const menuIdOf = (p) => parseInt(String(p.id).replace(/^PRD-/i, "").replace(/\D/g, ""), 10);
-  const variantsOf = (p) => variants.filter((v) => v.menu_id === menuIdOf(p));
+  const variantsOf = (p) => variants.filter((v) => v.pid === p.id);
   const add = async (p) => {
-    const menuId = menuIdOf(p);
     try {
-      const { data } = await api.get("/menu-variants", { params: { menu_id: menuId } });
-      setVariants((vs) => [...vs.filter((v) => v.menu_id !== menuId), ...data]);
+      const { data } = await api.get("/menu-variants", { params: { product_id: p.id } });
+      setVariants((vs) => [...vs.filter((v) => v.pid !== p.id), ...data.map((v) => ({ ...v, pid: p.id }))]);
       if (data.length) setVariantFor(p);
       else addLine(p, null);
     } catch (e) {

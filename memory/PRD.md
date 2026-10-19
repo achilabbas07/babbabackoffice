@@ -39,3 +39,9 @@ Latest request: "Lanjutkan implementasi kode berdasarkan tabel 'menu_variants', 
 - ProfileContext memuat branding saat aplikasi dibuka; `document.title` mengikuti nama usaha; fallback "POS Warkop Babba" + ikon logo bawaan.
 - Login & Header (desktop/mobile) memakai nama + logo dari database. Diverifikasi via screenshot (tanpa testing agent sesuai permintaan user).
 
+## 2026-10-19 — Varian hibrida (skema Supabase baru)
+- menu_variants kini pakai `product_id` (text); raw_materials pakai `stock`. Endpoint `GET /api/menu-variants?product_id=`.
+- Checkout: item tanpa variantId → logika stok lama (cek resep + trigger transactions_consume_stock). Item dengan variantId → dilewati dari logika lama (trigger transaksi di-skip untuk variantId), lalu INSERT order_logs (source=variant_sale, variant_id) → trigger `kurangi_stok_bahan` memotong raw_materials.
+- Skrip trigger: backend/scripts/variant_stock_bypass.py; cek e2e: backend/tests/variant_checkout_check.py (data TEST dibersihkan otomatis).
+
+

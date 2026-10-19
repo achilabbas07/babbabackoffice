@@ -7,7 +7,7 @@ from seed import seed_all
 from shifts import router as shifts_router, get_open_shift
 from targets import router as targets_router, log_order_diff, resolve_waiter
 from discounts import router as discounts_router, promo_discount, points_discount
-from variants import router as variants_router, load_variants, check_materials, consume_materials, product_num
+from variants import router as variants_router, load_variants, check_materials, log_variant_sales, product_num
 
 import logging
 from collections import defaultdict
@@ -177,7 +177,7 @@ async def build_items(items: List[OrderItemIn], order_type: str):
         if not p:
             raise HTTPException(404, f"Produk {i.productId} tidak ditemukan")
         v = variants.get(i.variantId) if i.variantId is not None else None
-        if i.variantId is not None and (not v or v["menu_id"] != product_num(p.id)):
+        if i.variantId is not None and (not v or product_num(v["product_id"]) != product_num(p.id)):
             raise HTTPException(400, f"Varian #{i.variantId} tidak cocok untuk {p.name}")
         extra = float(v.get("additional_price") or 0) if v else 0
         price = unit_price(p, order_type) + extra
@@ -195,6 +195,8 @@ async def stock_needs(items: List[dict]) -> dict:
     direct = {d["_id"]: d.get("inventoryId") async for d in db.products.find({"_id": {"$in": pids}})}
     needs = defaultdict(float)
     for it in items:
+        if it.get("variantId") is not None:
+            continue
         if by_prod.get(it["productId"]):
             for r in by_prod[it["productId"]]:
                 needs[r["inventoryId"]] += r["qty_needed"] * it["qty"]
@@ -707,7 +709,7 @@ async def create_transaction(body: TransactionIn, request: Request, user: User =
     cash = body.cashGiven if body.method == "Cash" else total
 
     await consume_stock(await stock_needs(items))
-    mat_needs = await check_materials(items)
+    await check_materials(items)
 
     if body.waiterId:
         wid, wname = await resolve_waiter(body.waiterId, "", user)
@@ -726,7 +728,7 @@ async def create_transaction(body: TransactionIn, request: Request, user: User =
         customerName=customer["name"] if customer else (body.customerName or (bill.customerName if bill else "")),
     )
     await db.transactions.insert_one(trx.to_mongo())
-    await consume_materials(items, mat_needs)
+    await log_variant_sales(items, trx.id, wid, wname)
     if not body.partial:
         old_items, old_w = (bill.items_json, (bill.waiterId, bill.waiterName)) if bill else ([], (None, ""))
         await log_order_diff(old_items, old_w, items, (wid, wname), "payment" if bill else "direct", trx.id)

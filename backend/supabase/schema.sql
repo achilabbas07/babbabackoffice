@@ -169,6 +169,8 @@ create or replace function trg_transactions_consume_stock() returns trigger lang
 declare it jsonb; v_qty numeric; v_pid text;
 begin
   for it in select * from jsonb_array_elements(new.items_json) loop
+    -- Item varian dipotong oleh trigger order_logs (kurangi_stok_bahan)
+    if it->>'variantId' is not null then continue; end if;
     v_pid := it->>'productId';
     v_qty := (it->>'qty')::numeric;
     if exists (select 1 from recipes where "productId" = v_pid) then
