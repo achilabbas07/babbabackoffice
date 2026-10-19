@@ -78,7 +78,7 @@ const CartLine = ({ item, price, locked, onQty, onNotes, onRemove }) => {
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1 truncate text-[13px] font-semibold leading-tight">
             {locked && <Lock data-testid={`cart-locked-${item.key}`} className="h-3 w-3 shrink-0 text-amber-600" />}
-            <span className="truncate">{item.name}</span>
+            <span data-testid={`cart-item-name-${item.key}`} className="truncate">{item.variantName || item.name}</span>
           </p>
           <p className="truncate font-mono text-[11px] text-muted-foreground">{rp(price)}{item.notes && !editNote ? ` · ${item.notes}` : ""}</p>
         </div>

@@ -49,4 +49,11 @@ Latest request: "Lanjutkan implementasi kode berdasarkan tabel 'menu_variants', 
 - Backend: `GET /api/raw-materials`, `POST /api/menu-variants` (admin) — INSERT menu_variants RETURNING id lalu loop INSERT variant_ingredients dalam satu transaksi Postgres (gagal = semua dibatalkan).
 
 
+## 2026-10-19 — raw_materials dihapus, varian pakai inventory
+- Form Tambah Varian: dropdown bahan dari `GET /api/inventory` difilter type = 'Bahan Baku'; simpan ke variant_ingredients.inventory_id.
+- Ketersediaan & validasi stok varian kini dari tabel inventory.
+- Keranjang: tampilkan variantName saja bila ada, selain itu nama produk (hanya tampilan; payload checkout tidak berubah).
+- PENDING (user): ubah tipe variant_ingredients.inventory_id dari bigint → text (ID inventory = 'INV-xxx'), lalu uji simpan varian + checkout varian.
+
+
 

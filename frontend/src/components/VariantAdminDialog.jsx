@@ -11,9 +11,9 @@ const INPUT = "h-10 w-full rounded-md border border-border bg-transparent px-3 t
 
 const IngredientRow = ({ idx, line, materials, onChange, onRemove }) => (
   <div data-testid={`variant-ingredient-row-${idx}`} className="grid grid-cols-[1fr_100px_32px] items-center gap-2">
-    <Select value={line.material_id || undefined} onValueChange={(v) => onChange({ material_id: v })}>
+    <Select value={line.inventory_id || undefined} onValueChange={(v) => onChange({ inventory_id: v })}>
       <SelectTrigger data-testid={`variant-material-select-${idx}`}><SelectValue placeholder="Pilih bahan baku" /></SelectTrigger>
-      <SelectContent>{materials.map((m) => <SelectItem key={m.id} value={String(m.id)}>{m.material_name} · stok {m.stock}</SelectItem>)}</SelectContent>
+      <SelectContent>{materials.map((m) => <SelectItem key={m.id} value={m.id}>{m.name} · stok {Number(m.stock)} {m.unit}</SelectItem>)}</SelectContent>
     </Select>
     <input data-testid={`variant-qty-input-${idx}`} type="number" min="1" value={line.qty_needed} onChange={(e) => onChange({ qty_needed: e.target.value })} className={`${INPUT} font-mono`} placeholder="Qty" />
     <button data-testid={`variant-remove-ingredient-${idx}`} onClick={onRemove} className="text-muted-foreground hover:text-destructive"><X className="h-4 w-4" /></button>
@@ -22,22 +22,22 @@ const IngredientRow = ({ idx, line, materials, onChange, onRemove }) => (
 
 export const VariantAdminDialog = ({ open, products, onClose }) => {
   const [form, setForm] = useState(EMPTY);
-  const [lines, setLines] = useState([{ material_id: "", qty_needed: 1 }]);
+  const [lines, setLines] = useState([{ inventory_id: "", qty_needed: 1 }]);
   const [materials, setMaterials] = useState([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
       setForm(EMPTY);
-      setLines([{ material_id: "", qty_needed: 1 }]);
-      api.get("/raw-materials").then((r) => setMaterials(r.data)).catch((e) => toast.error(errMsg(e)));
+      setLines([{ inventory_id: "", qty_needed: 1 }]);
+      api.get("/inventory").then((r) => setMaterials(r.data.filter((i) => i.type === "Bahan Baku"))).catch((e) => toast.error(errMsg(e)));
     }
   }, [open]);
 
   const update = (idx, patch) => setLines((ls) => ls.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
 
   const save = async () => {
-    const ingredients = lines.filter((l) => l.material_id).map((l) => ({ material_id: Number(l.material_id), qty_needed: Number(l.qty_needed) }));
+    const ingredients = lines.filter((l) => l.inventory_id).map((l) => ({ inventory_id: l.inventory_id, qty_needed: Number(l.qty_needed) }));
     if (!form.product_id || !form.variant_name.trim()) return toast.error("Pilih menu dan isi nama varian");
     if (!ingredients.length || ingredients.some((i) => !(i.qty_needed > 0))) return toast.error("Isi minimal 1 bahan baku dengan qty lebih dari 0");
     setSaving(true);
@@ -76,7 +76,7 @@ export const VariantAdminDialog = ({ open, products, onClose }) => {
             {lines.map((l, idx) => (
               <IngredientRow key={idx} idx={idx} line={l} materials={materials} onChange={(p) => update(idx, p)} onRemove={() => setLines((ls) => ls.filter((_, i) => i !== idx))} />
             ))}
-            <button data-testid="variant-add-ingredient" onClick={() => setLines((ls) => [...ls, { material_id: "", qty_needed: 1 }])} className="flex items-center gap-1.5 text-sm font-medium text-primary">
+            <button data-testid="variant-add-ingredient" onClick={() => setLines((ls) => [...ls, { inventory_id: "", qty_needed: 1 }])} className="flex items-center gap-1.5 text-sm font-medium text-primary">
               <Plus className="h-4 w-4" /> Tambah Bahan
             </button>
           </div>

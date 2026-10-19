@@ -54,7 +54,7 @@ export default function POS() {
     if (billId) {
       api.get(`/open-bills/${billId}`).then(({ data }) => {
         setOrder({ billId: data.id, type: data.type, tableId: data.tableId || "none", customerId: data.customerId || "none", customerName: data.customerName, waiterName: data.waiterName, waiterId: data.waiterId || null });
-        setCart(data.items_json.map((i) => ({ key: itemKey(i), productId: i.productId, variantId: i.variantId ?? null, extra: i.variantPrice || 0, name: itemName(i), price: i.price, qty: i.qty, notes: i.notes || "" })));
+        setCart(data.items_json.map((i) => ({ key: itemKey(i), productId: i.productId, variantId: i.variantId ?? null, extra: i.variantPrice || 0, variantName: i.variantName || "", name: itemName(i), price: i.price, qty: i.qty, notes: i.notes || "" })));
         setSaved(Object.fromEntries(data.items_json.map((i) => [itemKey(i), i.qty])));
         setAuthPin(null);
       }).catch((e) => toast.error(errMsg(e)));
@@ -72,7 +72,7 @@ export default function POS() {
     }
     setCart((c) => (c.some((i) => i.key === key)
       ? c.map((i) => (i.key === key ? { ...i, qty: i.qty + 1 } : i))
-      : [...c, { key, productId: p.id, variantId: v ? v.id : null, extra: v ? Number(v.additional_price || 0) : 0, name: v ? `${p.name} ${v.variant_name}` : p.name, price: p.price, qty: 1, notes: "" }]));
+      : [...c, { key, productId: p.id, variantId: v ? v.id : null, extra: v ? Number(v.additional_price || 0) : 0, variantName: v ? v.variant_name : "", name: v ? `${p.name} ${v.variant_name}` : p.name, price: p.price, qty: 1, notes: "" }]));
   };
   const variantsOf = (p) => variants.filter((v) => v.pid === p.id);
   const add = async (p) => {
