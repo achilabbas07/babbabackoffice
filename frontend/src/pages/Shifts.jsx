@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Printer } from "lucide-react";
 import { api, errMsg, fmtDate, rp } from "@/lib/api";
+import { ShiftPrintDialog } from "@/components/ShiftPrintDialog";
 import { PageHeader, Empty } from "@/components/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -8,6 +10,7 @@ const diffTone = (d) => (d == null ? "" : d === 0 ? "text-emerald-600" : d > 0 ?
 
 export default function Shifts() {
   const [list, setList] = useState([]);
+  const [printing, setPrinting] = useState(null);
   useEffect(() => {
     api.get("/shifts").then((r) => setList(r.data)).catch((e) => toast.error(errMsg(e)));
   }, []);
@@ -22,7 +25,7 @@ export default function Shifts() {
               <TableRow>
                 <TableHead>Shift</TableHead><TableHead>Kasir</TableHead><TableHead>Waktu</TableHead><TableHead className="text-right">Kas awal</TableHead>
                 <TableHead className="text-right">Tunai</TableHead><TableHead className="text-right">Non-tunai</TableHead><TableHead className="text-right">Masuk</TableHead>
-                <TableHead className="text-right">Keluar</TableHead><TableHead className="text-right">Seharusnya</TableHead><TableHead className="text-right">Fisik</TableHead><TableHead className="text-right">Selisih</TableHead>
+                <TableHead className="text-right">Keluar</TableHead><TableHead className="text-right">Seharusnya</TableHead><TableHead className="text-right">Fisik</TableHead><TableHead className="text-right">Selisih</TableHead><TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -42,12 +45,19 @@ export default function Shifts() {
                   <TableCell className="text-right font-mono font-semibold">{rp(s.expectedCash)}</TableCell>
                   <TableCell className="text-right font-mono">{s.countedCash == null ? "—" : rp(s.countedCash)}</TableCell>
                   <TableCell data-testid={`shift-diff-${s.id}`} className={`text-right font-mono font-semibold ${diffTone(s.difference)}`}>{s.difference == null ? "—" : rp(s.difference)}</TableCell>
+                  <TableCell>
+                    <button data-testid={`shift-reprint-${s.id}`} onClick={() => setPrinting(s)}
+                      className="flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-border px-3 text-xs font-medium hover:border-primary">
+                      <Printer className="h-3.5 w-3.5" />Print Ulang
+                    </button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </div>
       )}
+      <ShiftPrintDialog shift={printing} onClose={() => setPrinting(null)} />
     </div>
   );
 }

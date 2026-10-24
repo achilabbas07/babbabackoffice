@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Search, UtensilsCrossed } from "lucide-react";
 import { rp } from "@/lib/api";
 
-export const ProductGrid = ({ products, onAdd, ojol }) => {
+export const ProductGrid = ({ products, stock = {}, onAdd, ojol }) => {
   const [cat, setCat] = useState("Semua");
   const [q, setQ] = useState("");
   const cats = useMemo(() => ["Semua", ...new Set(products.map((p) => p.category))], [products]);
@@ -43,7 +43,12 @@ export const ProductGrid = ({ products, onAdd, ojol }) => {
             style={{ animationDelay: `${i * 30}ms` }}
             className="fade-up group overflow-hidden rounded-xl border border-border bg-card text-left shadow-sm transition-transform duration-200 hover:-translate-y-0.5 hover:border-primary/60 active:scale-[0.97]"
           >
-            <div className="aspect-[4/3] overflow-hidden bg-secondary">
+            <div className="relative aspect-[4/3] overflow-hidden bg-secondary">
+              {stock[p.id] != null && stock[p.id] < 1 && (
+                <span data-testid={`pos-product-stock-minus-${p.id}`} className="absolute left-1.5 top-1.5 z-10 rounded-full bg-destructive px-2 py-0.5 text-[10px] font-bold text-white shadow">
+                  {stock[p.id] < 0 ? "Stok Minus" : "Stok 0"}
+                </span>
+              )}
               {p.image ? (
                 <img src={p.image} alt={p.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
               ) : (

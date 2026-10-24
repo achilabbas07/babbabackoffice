@@ -211,8 +211,6 @@ async def consume_stock(needs: dict):
         d = inv.get(inv_id)
         if not d:
             raise HTTPException(400, f"Bahan {inv_id} tidak ditemukan di inventory")
-        if d["stock"] + 1e-9 < qty:
-            raise HTTPException(400, f"Stok {d['name']} tidak cukup (butuh {qty:g} {d['unit']}, tersedia {d['stock']:g})")
 
 
 async def occupy_table(table_id: str, bill: OpenBill):
@@ -354,6 +352,22 @@ async def validate_inventory_ref(inv_id: Optional[str]):
 async def list_products(_: User = Depends(ANY)):
     docs = await db.products.find().sort([("category", 1), ("name", 1)]).to_list(None)
     return [Product.from_mongo(d) for d in docs]
+
+
+@api.get("/products/stock")
+async def product_stock(_: User = Depends(ANY)):
+    inv = {d["_id"]: float(d["stock"] or 0) async for d in db.inventory.find()}
+    by_prod = defaultdict(list)
+    async for r in db.recipes.find():
+        by_prod[r["productId"]].append(r)
+    out = {}
+    async for p in db.products.find():
+        recipe = [r for r in by_prod.get(p["_id"], []) if float(r["qty_needed"] or 0) > 0]
+        if recipe:
+            out[p["_id"]] = min(inv.get(r["inventoryId"], 0) / float(r["qty_needed"]) for r in recipe)
+        elif p.get("inventoryId"):
+            out[p["_id"]] = inv.get(p["inventoryId"], 0)
+    return out
 
 
 @api.post("/products")

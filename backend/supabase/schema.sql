@@ -17,7 +17,7 @@ create table if not exists inventory (
   id             text primary key,
   name           text not null,
   type           text not null default 'Bahan Baku', -- Bahan Baku | Kemasan | Barang Jadi | Consumable
-  stock          numeric(14,3) not null default 0 check (stock >= 0),
+  stock          numeric(14,3) not null default 0,  -- boleh minus (penjualan tetap jalan saat stok habis)
   unit           text not null,                      -- gram | ml | pcs | kg
   cost_per_unit  numeric(14,2) not null default 0 check (cost_per_unit >= 0),
   min_stock      numeric(14,3) not null default 0

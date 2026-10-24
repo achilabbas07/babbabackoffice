@@ -18,6 +18,7 @@ export default function POS() {
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
   const [products, setProducts] = useState([]);
+  const [stock, setStock] = useState({});
   const [tables, setTables] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [waiters, setWaiters] = useState([]);
@@ -36,6 +37,7 @@ export default function POS() {
     try {
       const [p, t, c, w] = await Promise.all([api.get("/products"), api.get("/tables"), api.get("/customers"), api.get("/users/waiters")]);
       setProducts(p.data);
+      api.get("/products/stock").then((r) => setStock(r.data)).catch(() => {});
       setTables(t.data);
       setCustomers(c.data);
       setWaiters(w.data);
@@ -65,14 +67,9 @@ export default function POS() {
 
   const addLine = (p, v) => {
     const key = `${p.id}:${v ? v.id : ""}`;
-    const inCart = cart.find((i) => i.key === key)?.qty || 0;
-    if (v && v.available != null && inCart + 1 > v.available) {
-      toast.error(`Stok bahan baku untuk ${p.name} ${v.variant_name} tidak cukup${v.available > 0 ? `, maksimal ${v.available}` : " / habis"}`);
-      return;
-    }
     setCart((c) => (c.some((i) => i.key === key)
       ? c.map((i) => (i.key === key ? { ...i, qty: i.qty + 1 } : i))
-      : [...c, { key, productId: p.id, variantId: v ? v.id : null, extra: v ? Number(v.additional_price || 0) : 0, variantName: v ? v.variant_name : "", name: v ? `${p.name} ${v.variant_name}` : p.name, price: p.price, qty: 1, notes: "" }]));
+      : [...c, { key, productId: p.id, variantId: v ? v.id : null, extra: v ? Number(v.additional_price || 0) : 0, variantName: v ? v.variant_name : "", name: v ? v.variant_name : p.name, price: p.price, qty: 1, notes: "" }]));
   };
   const variantsOf = (p) => variants.filter((v) => v.pid === p.id);
   const add = async (p) => {
@@ -102,11 +99,6 @@ export default function POS() {
   };
   const changeQty = (id, d) => {
     const item = cart.find((i) => i.key === id);
-    const v = item.variantId != null && variants.find((x) => x.id === item.variantId);
-    if (d > 0 && v && v.available != null && item.qty + d > v.available) {
-      toast.error(`Stok bahan baku untuk ${item.name} tidak cukup, maksimal ${v.available}`);
-      return;
-    }
     guarded(id, item.qty + d, () => setCart((c) => c.map((i) => (i.key === id ? { ...i, qty: i.qty + d } : i)).filter((i) => i.qty > 0)));
   };
   const removeItem = (id) => guarded(id, 0, () => setCart((c) => c.filter((i) => i.key !== id)));
@@ -159,7 +151,7 @@ export default function POS() {
 
   return (
     <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_340px] lg:grid-cols-[minmax(0,1fr)_350px] xl:grid-cols-[minmax(0,1fr)_380px]">
-      <ProductGrid products={products} onAdd={add} ojol={ojol} />
+      <ProductGrid products={products} stock={stock} onAdd={add} ojol={ojol} />
       <VariantDialog product={variantFor} variants={variantFor ? variantsOf(variantFor) : []} onClose={() => setVariantFor(null)}
         basePrice={variantFor ? (ojol && variantFor.price_ojol > 0 ? variantFor.price_ojol : variantFor.price) : 0}
         onPick={(v) => { addLine(variantFor, v); setVariantFor(null); }} />

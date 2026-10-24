@@ -66,6 +66,14 @@ Latest request: "Lanjutkan implementasi kode berdasarkan tabel 'menu_variants', 
 - Layout 70/30 (lg:grid-cols-[7fr_3fr]); kiri tabel lama tanpa perubahan fungsi, kanan card "10 Pelanggan Terbaik" (TopCustomers.jsx).
 - `GET /api/customers/top`: total_spent > 0, ORDER BY total_spent DESC, points DESC, LIMIT 10 (read-only). Di HP card turun ke bawah tabel.
 
+## 2026-10-24 — Floor plan touch-friendly, nama varian, stok minus, print ulang shift
+- Floor plan: CELL 116→180, TILE 98→160, ikon & font diperbesar (posisi grid x/y tidak berubah).
+- itemName = variantName || productName (keranjang, struk, tiket dapur, open bill); order_logs.productName varian = nama varian.
+- Stok boleh minus: constraint inventory_stock_check di-DROP di Supabase; validasi stok kurang di backend dihapus; tombol varian tidak lagi disabled. `GET /api/products/stock` → badge merah "Stok Minus"/"Stok 0" di kartu produk (porsi < 1).
+- Riwayat Shift: tombol "Print Ulang" per baris → ShiftPrintDialog (saldo awal, penjualan, kas masuk/keluar, saldo akhir, fisik, selisih) via window.print.
+- variant_ingredients.inventory_id sudah text (diubah user) — checkout varian teruji memotong inventory via trigger.
+
+
 
 
 

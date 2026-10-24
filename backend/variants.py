@@ -68,7 +68,7 @@ async def list_menu_variants(product_id: str, _: User = Depends(ANY)):
         caps = [int(mats.get(i["inventory_id"], 0) // float(i["qty_needed"])) for i in by_variant[r["_id"]] if float(i["qty_needed"] or 0) > 0]
         out.append({"id": r["_id"], "product_id": r["product_id"], "variant_name": r["variant_name"],
                     "additional_price": r.get("additional_price") or 0,
-                    "available": max(0, min(caps)) if caps else None})
+                    "available": min(caps) if caps else None})
     return out
 
 
@@ -100,16 +100,12 @@ async def check_materials(items: List[dict]):
         m = mats.get(mid)
         if not m:
             raise HTTPException(400, f"Bahan baku {mid} tidak ditemukan di inventory")
-        stock = float(m["stock"] or 0)
-        if stock + 1e-9 < qty:
-            label = "habis" if stock <= 0 else "tidak cukup"
-            raise HTTPException(400, f"Stok bahan baku {m['name']} {label} (butuh {qty:g} {m.get('unit') or ''}, tersedia {stock:g})")
 
 
 async def log_variant_sales(items: List[dict], ref: str, waiter_id, waiter_name: str):
     ts = now_iso()
     docs = [{"_id": str(uuid.uuid4()), "timestamp": ts, "waiterId": waiter_id, "waiterName": waiter_name or "",
-             "productId": it["productId"], "productName": f"{it['productName']} {it.get('variantName') or ''}".strip(),
+             "productId": it["productId"], "productName": it.get("variantName") or it["productName"],
              "qty": it["qty"], "source": "variant_sale", "refId": ref, "shiftId": None, "variant_id": it["variantId"]}
             for it in items if it.get("variantId") is not None and it["qty"] > 0]
     if docs:
