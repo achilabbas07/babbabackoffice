@@ -3,9 +3,9 @@ import { Armchair, Store } from "lucide-react";
 import { ConfirmDelete } from "@/components/ConfirmDelete";
 import { fmtTime } from "@/lib/api";
 
-export const CELL = 116;
+export const CELL = 180;
 const PAD = 20;
-const TILE = 98;
+const TILE = 160;
 
 export const STATUS = {
   available: { label: "Kosong", dot: "bg-emerald-500", text: "text-emerald-700" },
@@ -40,13 +40,13 @@ const Tile = ({ t, editing }) => {
   const od = t.orderData;
   const busy = !editing && t.status === "occupied" && od;
   return (
-    <div className={`w-full px-1.5 ${fixture ? "text-slate-500" : s.text}`}>
-      <Icon className={`mx-auto ${busy ? "h-4 w-4" : "h-6 w-6"}`} strokeWidth={2.2} />
-      <p className="mt-0.5 truncate text-xs font-bold">{t.name}</p>
+    <div className={`w-full px-2 ${fixture ? "text-slate-500" : s.text}`}>
+      <Icon className={`mx-auto ${busy ? "h-7 w-7" : "h-10 w-10"}`} strokeWidth={2.2} />
+      <p className="mt-1 truncate text-base font-bold">{t.name}</p>
       {busy && (
         <>
-          <p data-testid={`table-tile-customer-${t.id}`} className="truncate text-[10px] font-medium text-slate-600">{od.customerName || "Umum"}</p>
-          <p data-testid={`table-tile-time-${t.id}`} className="font-mono text-[10px]">{fmtTime(od.startTime)} · {shortRp(od.total || 0)}</p>
+          <p data-testid={`table-tile-customer-${t.id}`} className="truncate text-xs font-medium text-slate-600">{od.customerName || "Umum"}</p>
+          <p data-testid={`table-tile-time-${t.id}`} className="font-mono text-xs">{fmtTime(od.startTime)} · {shortRp(od.total || 0)}</p>
         </>
       )}
     </div>
