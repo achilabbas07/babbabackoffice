@@ -73,6 +73,10 @@ Latest request: "Lanjutkan implementasi kode berdasarkan tabel 'menu_variants', 
 - Riwayat Shift: tombol "Print Ulang" per baris → ShiftPrintDialog (saldo awal, penjualan, kas masuk/keluar, saldo akhir, fisik, selisih) via window.print.
 - variant_ingredients.inventory_id sudah text (diubah user) — checkout varian teruji memotong inventory via trigger.
 
+## 2026-10-24 — HPP varian
+- Transaksi baru: hpp item varian = Σ(variant_ingredients.qty_needed × inventory.cost_per_unit) (variant_hpp di variants.py); varian tanpa resep → HPP produk utama. Transaksi lama TIDAK dihitung ulang (pilihan user).
+
+
 
 
 

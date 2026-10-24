@@ -7,7 +7,7 @@ from seed import seed_all
 from shifts import router as shifts_router, get_open_shift
 from targets import router as targets_router, log_order_diff, resolve_waiter
 from discounts import router as discounts_router, promo_discount, points_discount
-from variants import router as variants_router, load_variants, check_materials, log_variant_sales, product_num
+from variants import router as variants_router, load_variants, check_materials, log_variant_sales, product_num, variant_hpp
 
 import logging
 from collections import defaultdict
@@ -170,7 +170,9 @@ def unit_price(p: Product, order_type: str) -> float:
 async def build_items(items: List[OrderItemIn], order_type: str):
     ids = list({i.productId for i in items})
     prods = {d["_id"]: Product.from_mongo(d) async for d in db.products.find({"_id": {"$in": ids}})}
-    variants = await load_variants(list({i.variantId for i in items if i.variantId is not None}))
+    vids = list({i.variantId for i in items if i.variantId is not None})
+    variants = await load_variants(vids)
+    v_hpp = await variant_hpp(vids)
     out = []
     for i in items:
         p = prods.get(i.productId)
@@ -181,7 +183,7 @@ async def build_items(items: List[OrderItemIn], order_type: str):
             raise HTTPException(400, f"Varian #{i.variantId} tidak cocok untuk {p.name}")
         extra = float(v.get("additional_price") or 0) if v else 0
         price = unit_price(p, order_type) + extra
-        out.append({"productId": p.id, "productName": p.name, "qty": i.qty, "price": price, "hpp": p.hpp,
+        out.append({"productId": p.id, "productName": p.name, "qty": i.qty, "price": price, "hpp": v_hpp.get(v["_id"], p.hpp) if v else p.hpp,
                     "notes": i.notes, "subtotal": price * i.qty, "variantId": i.variantId,
                     "variantName": v["variant_name"] if v else "", "variantPrice": extra})
     return out, sum(x["subtotal"] for x in out)

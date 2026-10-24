@@ -78,6 +78,17 @@ async def load_variants(ids: List[int]) -> dict:
     return {r["_id"]: r async for r in db.menu_variants.find({"_id": {"$in": ids}})}
 
 
+async def variant_hpp(ids: List[int]) -> dict:
+    if not ids:
+        return {}
+    rows = await db.variant_ingredients.find({"variant_id": {"$in": ids}}).to_list(None)
+    cost = {d["_id"]: float(d["cost_per_unit"] or 0) async for d in db.inventory.find({"_id": {"$in": list({r["inventory_id"] for r in rows})}})} if rows else {}
+    out = defaultdict(float)
+    for r in rows:
+        out[r["variant_id"]] += float(r["qty_needed"] or 0) * cost.get(r["inventory_id"], 0)
+    return {k: round(v, 2) for k, v in out.items()}
+
+
 def variant_qty(items: List[dict]) -> dict:
     out = defaultdict(int)
     for it in items:
