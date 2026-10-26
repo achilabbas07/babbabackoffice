@@ -1,6 +1,6 @@
 import os
 
-from core import (Customer, InventoryItem, Product, Recipe, Table, db, hash_pin, next_id, recalc_hpp, verify_pin)
+from core import (Customer, InventoryItem, Product, Recipe, Table, db, hash_pin, is_hashed, next_id, recalc_hpp)
 
 INVENTORY = [
     ("Biji Kopi Arabika", "Bahan Baku", 2000, "gram", 250, 300),
@@ -33,13 +33,17 @@ PRODUCTS = [
 TABLES = [(f"Meja {i}", "Indoor") for i in range(1, 7)] + [(f"Teras {i}", "Outdoor") for i in range(1, 4)] + [("VIP 1", "VIP Room")]
 
 
+async def hash_plain_pins():
+    # PIN yang diisi langsung di Supabase (teks biasa) dienkripsi tanpa mengubah nilainya
+    async for u in db.users.find():
+        if u.get("pin") and not is_hashed(u["pin"]):
+            await db.users.update_one({"_id": u["_id"]}, {"$set": {"pin": hash_pin(str(u["pin"]).strip())}})
+
+
 async def seed_admin():
-    pin = os.environ["ADMIN_PIN"]
-    doc = await db.users.find_one({"_id": "USR-ADMIN"})
-    if not doc:
-        await db.users.insert_one({"_id": "USR-ADMIN", "name": "Admin", "role": "admin", "pin": hash_pin(pin)})
-    elif not verify_pin(pin, doc["pin"]):
-        await db.users.update_one({"_id": "USR-ADMIN"}, {"$set": {"pin": hash_pin(pin)}})
+    await hash_plain_pins()
+    if not await db.users.find_one({"_id": "USR-ADMIN"}):
+        await db.users.insert_one({"_id": "USR-ADMIN", "name": "Admin", "role": "admin", "pin": hash_pin(os.environ["ADMIN_PIN"])})
 
 
 async def seed_demo():

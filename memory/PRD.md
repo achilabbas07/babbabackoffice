@@ -77,6 +77,11 @@ Latest request: "Lanjutkan implementasi kode berdasarkan tabel 'menu_variants', 
 - Transaksi baru: hpp item varian = Σ(variant_ingredients.qty_needed × inventory.cost_per_unit) (variant_hpp di variants.py); varian tanpa resep → HPP produk utama. Transaksi lama TIDAK dihitung ulang (pilihan user).
 
 
+## 2026-10-26 — Bug: halaman login kosong (502)
+- Penyebab: PIN Admin & KASIR PAGI diisi teks biasa langsung di Supabase → bcrypt "Invalid salt" saat startup → backend gagal start.
+- Fix: verify_pin aman untuk nilai non-hash; startup meng-hash PIN teks biasa (nilai tetap); seed tidak lagi me-reset PIN Admin ke ADMIN_PIN.
+
+
 
 
 

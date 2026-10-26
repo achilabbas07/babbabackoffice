@@ -42,8 +42,17 @@ def hash_pin(pin: str) -> str:
     return bcrypt.hashpw(pin.encode("utf-8"), bcrypt.gensalt(rounds=10)).decode("utf-8")
 
 
+def is_hashed(pin: str) -> bool:
+    return str(pin or "").startswith("$2")
+
+
 def verify_pin(pin: str, hashed: str) -> bool:
-    return bcrypt.checkpw(pin.encode("utf-8"), hashed.encode("utf-8"))
+    if not is_hashed(hashed):
+        return False
+    try:
+        return bcrypt.checkpw(pin.encode("utf-8"), hashed.encode("utf-8"))
+    except ValueError:
+        return False
 
 
 def create_token(user_id: str) -> str:
