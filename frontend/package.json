@@ -61,7 +61,6 @@
     "zod": "3.24.4"
   },
   "scripts": {
-    "preinstall": "npm config set legacy-peer-deps true",
     "start": "craco start",
     "build": "craco build",
     "test": "craco test"
