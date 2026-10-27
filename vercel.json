@@ -1,6 +1,7 @@
 {
   "version": 2,
   "outputDirectory": "frontend/build",
+  "framework": "create-react-app",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "api/index.py" },
     { "source": "/(.*)", "destination": "frontend/$1" }
