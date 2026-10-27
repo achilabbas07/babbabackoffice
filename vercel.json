@@ -7,7 +7,6 @@
   ],
   "functions": {
     "backend/server.py": {
-      "runtime": "@vercel/python@latest",
       "excludeFiles": "{frontend/**,node_modules/**,public/**,static/**,build/**,.git/**,tests/**,**/*.test.py}"
     }
   }
