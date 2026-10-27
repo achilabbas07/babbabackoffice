@@ -1,26 +1,14 @@
 {
   "version": 2,
-  "builds": [
-    { 
-      "src": "frontend/package.json", 
-      "use": "@vercel/static-build", 
-      "config": { 
-        "distDir": "build",
-        "installCommand": "npm install --legacy-peer-deps" 
-      } 
-    },
-    { 
-      "src": "backend/server.py", 
-      "use": "@vercel/python" 
-    }
-  ],
-  "functions": {
-    "backend/server.py": {
-      "excludeFiles": "{frontend/**,node_modules/**,public/**,static/**,build/**,.git/**,tests/**,**/*.test.py}"
-    }
-  },
+  "outputDirectory": "frontend/build",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "backend/server.py" },
     { "source": "/(.*)", "destination": "frontend/$1" }
-  ]
+  ],
+  "functions": {
+    "backend/server.py": {
+      "runtime": "@vercel/python",
+      "excludeFiles": "{frontend/**,node_modules/**,public/**,static/**,build/**,.git/**,tests/**,**/*.test.py}"
+    }
+  }
 }
