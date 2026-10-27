@@ -10,12 +10,12 @@
       } 
     },
     { 
-      "src": "backend/package.json", 
-      "use": "@vercel/node" 
+      "src": "backend/server.py", 
+      "use": "@vercel/python" 
     }
   ],
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "backend/package.json" },
+    { "source": "/api/(.*)", "destination": "backend/server.py" },
     { "source": "/(.*)", "destination": "frontend/$1" }
   ]
 }
