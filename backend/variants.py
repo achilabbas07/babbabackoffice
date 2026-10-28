@@ -237,3 +237,55 @@ async def check_materials(items: List[dict]):
         m = mats.get(mid)
         if not m:
             raise HTTPException(400, f"Bahan baku {mid} tidak ditemukan di inventory")
+
+
+async def consume_checkout_stock(conn, items: List[dict]):
+    await conn.execute(
+        """
+        WITH checkout_items AS (
+            SELECT "productId", qty, "variantId"
+            FROM jsonb_to_recordset($1::jsonb) AS item(
+                "productId" text,
+                qty numeric,
+                "variantId" integer
+            )
+        ),
+        inventory_needs AS (
+            SELECT vi.inventory_id, SUM(ci.qty * vi.qty_needed) AS qty
+            FROM checkout_items ci
+            JOIN variant_ingredients vi ON vi.variant_id = ci."variantId"
+            WHERE ci."variantId" IS NOT NULL
+            GROUP BY vi.inventory_id
+
+            UNION ALL
+
+            SELECT r."inventoryId", SUM(ci.qty * r.qty_needed) AS qty
+            FROM checkout_items ci
+            JOIN recipes r ON r."productId" = ci."productId"
+            WHERE ci."variantId" IS NULL
+            GROUP BY r."inventoryId"
+
+            UNION ALL
+
+            SELECT p."inventoryId", SUM(ci.qty) AS qty
+            FROM checkout_items ci
+            JOIN products p ON p.id = ci."productId"
+            WHERE ci."variantId" IS NULL
+              AND p."inventoryId" IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM recipes r WHERE r."productId" = p.id
+              )
+            GROUP BY p."inventoryId"
+        ),
+        total_needs AS (
+            SELECT inventory_id, SUM(qty) AS qty
+            FROM inventory_needs
+            GROUP BY inventory_id
+        )
+        UPDATE inventory i
+        SET stock = i.stock - n.qty
+        FROM total_needs n
+        WHERE i.id = n.inventory_id
+        """,
+        items,
+    )

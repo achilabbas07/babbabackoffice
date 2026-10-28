@@ -7,7 +7,14 @@ from seed import seed_all
 from shifts import router as shifts_router, get_open_shift
 from targets import router as targets_router, log_order_diff, resolve_waiter
 from discounts import router as discounts_router, promo_discount, points_discount
-from variants import router as variants_router, load_variants, check_materials, product_num, variant_hpp
+from variants import (
+    router as variants_router,
+    load_variants,
+    check_materials,
+    consume_checkout_stock,
+    product_num,
+    variant_hpp,
+)
 
 import logging
 import asyncpg
@@ -736,10 +743,7 @@ async def create_transaction(body: TransactionIn, request: Request, user: User =
         async with db.pool.acquire() as conn:
             async with conn.transaction():
                 await db.transactions.insert_one(trx.to_mongo(), connection=conn)
-                await conn.fetchval(
-                    "select proses_checkout_dan_stok_fleksibel('{}'::jsonb, $1::jsonb)",
-                    items,
-                )
+                await consume_checkout_stock(conn, items)
     except asyncpg.PostgresError as err:
         message = getattr(err, "message", None) or str(err)
         raise HTTPException(400, f"Checkout gagal: {message}") from err
