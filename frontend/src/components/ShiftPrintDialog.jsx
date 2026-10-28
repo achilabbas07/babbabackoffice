@@ -1,6 +1,7 @@
 import { Printer } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { fmtDate, rp } from "@/lib/api";
+import { printDocument } from "@/lib/print";
 import { PrintHeader } from "@/components/ReceiptDialog";
 
 const Row = ({ label, value, bold }) => (
@@ -41,7 +42,7 @@ export const ShiftPrintDialog = ({ shift, onClose }) => (
             <Row label="Selisih" value={shift.difference == null ? "—" : rp(shift.difference)} bold />
             {shift.note && <p className="pt-1 text-xs text-muted-foreground">Catatan: {shift.note}</p>}
           </div>
-          <button data-testid="shift-print-button" onClick={() => window.print()}
+          <button data-testid="shift-print-button" onClick={() => printDocument("laporan shift")}
             className="no-print flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border font-medium hover:border-primary">
             <Printer className="h-4 w-4" /> Cetak
           </button>

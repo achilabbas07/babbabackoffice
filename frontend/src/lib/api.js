@@ -25,7 +25,12 @@ export function errMsg(e) {
   const data = e?.response?.data;
   const detail = data?.error ?? data?.detail;
   const stage = typeof data?.stage === "string" ? ` (${data.stage})` : "";
-  if (detail == null) return e?.message || "Terjadi kesalahan. Silakan coba lagi.";
+  if (detail == null) {
+    if (e?.message === "Network Error") {
+      return "Tidak dapat terhubung ke server POS. Periksa koneksi internet dan coba lagi.";
+    }
+    return e?.message || "Terjadi kesalahan. Silakan coba lagi.";
+  }
   if (typeof detail === "string") return `${detail}${stage}`;
   if (Array.isArray(detail)) return `${detail.map((d) => (d && typeof d.msg === "string" ? d.msg : JSON.stringify(d))).join(" ")}${stage}`;
   if (typeof detail.msg === "string") return `${detail.msg}${stage}`;

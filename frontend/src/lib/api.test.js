@@ -10,4 +10,9 @@ describe("errMsg", () => {
     expect(errMsg({ response: { data: { detail: "Meja tidak ditemukan" } } }))
       .toBe("Meja tidak ditemukan");
   });
+
+  it("explains how to recover from a server network error", () => {
+    expect(errMsg({ message: "Network Error" }))
+      .toContain("Periksa koneksi internet dan coba lagi");
+  });
 });

@@ -1,6 +1,7 @@
 import { Printer } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { fmtDate, itemName, rp } from "@/lib/api";
+import { printDocument } from "@/lib/print";
 import { useProfile } from "@/context/ProfileContext";
 import { BrandLogo } from "@/components/BrandLogo";
 
@@ -73,7 +74,7 @@ export const ReceiptDialog = ({ trx, onClose }) => (
           <PrintFooter paid />
           <button
             data-testid="receipt-print-button"
-            onClick={() => window.print()}
+            onClick={() => printDocument("struk pembayaran")}
             className="no-print flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border font-medium hover:border-primary"
           >
             <Printer className="h-4 w-4" /> Cetak Struk
