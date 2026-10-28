@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { LockOpen, LogOut } from "lucide-react";
+import { Bluetooth, LockOpen, LogOut } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api, errMsg, rp } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 
 const ShiftCtx = createContext({ shift: null, refresh: () => {} });
 export const useShift = () => useContext(ShiftCtx);
@@ -52,6 +53,25 @@ export const OpenShiftForm = ({ onOpened }) => {
 const OpenShiftScreen = ({ onOpened, waiter }) => {
   const { user, logout } = useAuth();
   const [busy, setBusy] = useState(false);
+  const [connectingPrinter, setConnectingPrinter] = useState("");
+  const connectPrinter = async (field, label) => {
+    if (!navigator.bluetooth?.requestDevice) {
+      toast.error("Browser ini tidak mendukung Web Bluetooth. Gunakan browser yang kompatibel melalui HTTPS.");
+      return;
+    }
+
+    setConnectingPrinter(field);
+    try {
+      const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true });
+      if (!device.name) throw new Error("Nama perangkat Bluetooth tidak tersedia.");
+      await api.put("/app-profile/printers", { [field]: device.name });
+      toast.success(`${label} tersimpan: ${device.name}`);
+    } catch (err) {
+      toast.error(err.name === "NotFoundError" ? "Pemilihan perangkat dibatalkan." : errMsg(err));
+    } finally {
+      setConnectingPrinter("");
+    }
+  };
   const startWaiter = async () => {
     setBusy(true);
     try {
@@ -78,6 +98,25 @@ const OpenShiftScreen = ({ onOpened, waiter }) => {
             <LockOpen className="h-4 w-4" />{busy ? "Memulai..." : "Mulai Shift"}
           </button>
         ) : <OpenShiftForm onOpened={onOpened} />}
+        <div className="mt-5 grid gap-2 rounded-xl border border-border p-4">
+          <p className="text-sm font-medium">Inisialisasi Printer Bluetooth</p>
+          {[
+            { field: "printerKasir", label: "Hubungkan Printer Kasir" },
+            { field: "printerDapur", label: "Hubungkan Printer Dapur" },
+          ].map(({ field, label }) => (
+            <Button
+              key={field}
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={!!connectingPrinter}
+              onClick={() => connectPrinter(field, label.replace("Hubungkan ", ""))}
+            >
+              <Bluetooth className="h-4 w-4" />
+              {connectingPrinter === field ? "Menghubungkan..." : label}
+            </Button>
+          ))}
+        </div>
         <button data-testid="open-shift-logout" onClick={logout} className="mt-4 flex w-full items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground">
           <LogOut className="h-4 w-4" /> Bukan Anda? Keluar
         </button>

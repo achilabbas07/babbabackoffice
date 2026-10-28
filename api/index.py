@@ -800,6 +800,11 @@ class AppProfileIn(BaseModel):
     cetakOtomatis: bool = False
 
 
+class AppProfilePrintersIn(BaseModel):
+    printerDapur: Optional[str] = Field(None, max_length=120)
+    printerKasir: Optional[str] = Field(None, max_length=120)
+
+
 PROFILE_TEXT_FIELDS = ("app_name", "logo_url", "address", "phone", "additional_info", "printerDapur", "printerKasir")
 
 
@@ -821,6 +826,17 @@ async def update_app_profile(body: AppProfileIn, _: User = Depends(ADMIN)):
     data["cetakOtomatis"] = body.cetakOtomatis
     await db.app_profile.update_one({"_id": 1}, {"$set": data}, upsert=True)
     return data
+
+
+@api.put("/app-profile/printers")
+async def update_app_profile_printers(body: AppProfilePrintersIn, _: User = Depends(ANY)):
+    data = body.model_dump(exclude_unset=True)
+    if not data or any(value is None or not value.strip() for value in data.values()):
+        raise HTTPException(422, "Pilih setidaknya satu nama printer yang valid")
+    data = {key: value.strip() for key, value in data.items()}
+    await db.app_profile.update_one({"_id": 1}, {"$set": data}, upsert=True)
+    return data
+
 
 @api.get("/expenses")
 async def list_expenses(_: User = Depends(ADMIN)):
