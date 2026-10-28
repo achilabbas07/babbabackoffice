@@ -85,10 +85,29 @@ export default function Login() {
   const { user, login } = useAuth();
   const brand = useProfile();
   const [users, setUsers] = useState([]);
+  const [usersError, setUsersError] = useState("");
+  const [usersLoading, setUsersLoading] = useState(true);
   const [selected, setSelected] = useState(null);
 
   useEffect(() => {
-    api.get("/auth/users").then((r) => setUsers(r.data)).catch(() => setUsers([]));
+    if (!process.env.REACT_APP_BACKEND_URL?.trim()) {
+      setUsersError("Backend belum dikonfigurasi. Atur REACT_APP_BACKEND_URL di Vercel, lalu deploy ulang.");
+      setUsersLoading(false);
+      return;
+    }
+
+    api.get("/auth/users")
+      .then(({ data }) => {
+        if (!Array.isArray(data)) {
+          throw new Error("Respons backend tidak valid. Endpoint /api/auth/users harus mengembalikan daftar pengguna.");
+        }
+        setUsers(data);
+      })
+      .catch((err) => {
+        setUsers([]);
+        setUsersError(errMsg(err));
+      })
+      .finally(() => setUsersLoading(false));
   }, []);
 
   if (user) return <Navigate to="/pos" replace />;
@@ -114,7 +133,15 @@ export default function Login() {
               <p className="text-sm text-muted-foreground">{selected ? "Masukkan PIN Anda" : "Pilih nama pengguna"}</p>
             </div>
           </div>
-          {selected ? <PinPad selected={selected} onBack={() => setSelected(null)} onSubmit={(pin) => login(selected.id, pin)} /> : <UserPicker users={users} onPick={setSelected} />}
+          {selected ? <PinPad selected={selected} onBack={() => setSelected(null)} onSubmit={(pin) => login(selected.id, pin)} /> : usersLoading ? (
+            <p role="status" className="text-center text-sm text-muted-foreground">Memuat daftar pengguna...</p>
+          ) : usersError ? (
+            <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{usersError}</p>
+          ) : users.length ? (
+            <UserPicker users={users} onPick={setSelected} />
+          ) : (
+            <p role="status" className="text-center text-sm text-muted-foreground">Belum ada pengguna. Tambahkan pengguna melalui backend.</p>
+          )}
         </div>
       </div>
     </div>
