@@ -15,7 +15,9 @@ export const isDirectPay = (type) => ORDER_TYPES.some((t) => t.id === type && t.
 const inputCls = "h-9 min-w-0 rounded-lg border border-border bg-transparent px-3 text-sm outline-none focus:border-primary";
 
 const OrderOptions = ({ order, setOrder, tables, customers, waiters, canPay }) => {
-  const freeTables = tables.filter((t) => t.kind !== "fixture" && (t.status !== "occupied" || t.orderData?.openBillId === order.billId));
+  const freeTables = tables.filter((t) => t.kind !== "fixture" && (
+    t.status !== "occupied" || t.orderData?.openBillId === order.billId || t.id === order.tableId
+  ));
   const set = (patch) => setOrder((o) => ({ ...o, ...patch }));
   const types = ORDER_TYPES.filter((t) => canPay || !t.direct);
   return (
