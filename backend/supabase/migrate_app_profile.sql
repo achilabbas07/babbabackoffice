@@ -15,6 +15,10 @@ CREATE TABLE IF NOT EXISTS public.app_profile (
   "cetakOtomatis" boolean NOT NULL DEFAULT false
 );
 
+ALTER TABLE public.app_profile
+  ADD COLUMN IF NOT EXISTS "printerDapur" text NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS "printerKasir" text NOT NULL DEFAULT '';
+
 ALTER TABLE public.app_profile ENABLE ROW LEVEL SECURITY;
 
 COMMIT;
