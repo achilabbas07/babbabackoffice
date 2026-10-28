@@ -200,17 +200,21 @@ async def occupy_table(table_id: str, bill: OpenBill):
     order_data = {"openBillId": bill.id, "customerName": bill.customerName, "waiterName": bill.waiterName,
                   "total": bill.total, "itemCount": sum(i["qty"] for i in bill.items_json),
                   "startTime": od.get("startTime") if od.get("openBillId") == bill.id else bill.timestamp}
-    await db.tables.update_one({"_id": table_id}, {"$set": {"status": "occupied", "orderData": order_data}})
+    await db.tables.update_one({"_id": table_id}, {"$set": {
+        "status": "occupied",
+        "open_bill_id": bill.id,
+        "orderData": order_data,
+    }})
 
 
 async def free_table(table_id: Optional[str]):
     if table_id:
-        await db.tables.update_one({"_id": table_id}, {"$set": {"status": "available", "orderData": None}})
+        await db.tables.update_one({"_id": table_id}, {"$set": {"status": "available", "open_bill_id": None, "orderData": None}})
 
 
 async def mark_paid(table_id: str, trx: Transaction):
     order_data = {"lastTransactionId": trx.id, "total": trx.total, "paidAt": trx.date}
-    await db.tables.update_one({"_id": table_id}, {"$set": {"status": "paid", "orderData": order_data}})
+    await db.tables.update_one({"_id": table_id}, {"$set": {"status": "paid", "open_bill_id": None, "orderData": order_data}})
 
 
 def client_ident(request: Request) -> str:

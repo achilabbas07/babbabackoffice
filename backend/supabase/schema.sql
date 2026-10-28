@@ -60,10 +60,12 @@ create table if not exists tables (
   area         text not null,
   status       text not null default 'available' check (status in ('available','occupied','paid','reserved')),
   "orderData"  jsonb,                                -- {openBillId, customerName, waiterName, total, itemCount, startTime}
+  "open_bill_id" text references open_bills(id) on delete set null,
   kind         text not null default 'table' check (kind in ('table','fixture')),
   x            integer,
   y            integer
 );
+create index if not exists tables_open_bill_idx on tables("open_bill_id");
 
 -- ---------- 2. Operasional ----------
 create table if not exists open_bills (
