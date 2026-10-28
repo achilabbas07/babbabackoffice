@@ -50,6 +50,9 @@ Latest request: "Lanjutkan implementasi kode berdasarkan tabel 'menu_variants', 
 - Tombol "Tambah Varian" di halaman Produk & Resep → modal `VariantAdminDialog.jsx` (pilih menu, nama varian, harga tambahan, baris bahan baku dinamis + "Tambah Bahan").
 - Backend: `GET /api/raw-materials`, `POST /api/menu-variants` (admin) — INSERT menu_variants RETURNING id lalu loop INSERT variant_ingredients dalam satu transaksi Postgres (gagal = semua dibatalkan).
 
+## 2026-10-28 — CRUD API Varian
+- `GET /api/products/{product_id}/variants` mengembalikan varian bersama resep bahan melalui JOIN ke `variant_ingredients` dan `inventory`.
+- `POST /api/variants`, `PUT /api/variants/{variant_id}`, dan `DELETE /api/variants/{variant_id}` mengelola varian beserta resepnya dalam transaksi; perubahan tulis hanya untuk admin.
 
 ## 2026-10-19 — raw_materials dihapus, varian pakai inventory
 - Form Tambah Varian: dropdown bahan dari `GET /api/inventory` difilter type = 'Bahan Baku'; simpan ke variant_ingredients.inventory_id.
@@ -82,7 +85,6 @@ Latest request: "Lanjutkan implementasi kode berdasarkan tabel 'menu_variants', 
 ## 2026-10-26 — Bug: halaman login kosong (502)
 - Penyebab: PIN Admin & KASIR PAGI diisi teks biasa langsung di Supabase → bcrypt "Invalid salt" saat startup → backend gagal start.
 - Fix: verify_pin aman untuk nilai non-hash; startup meng-hash PIN teks biasa (nilai tetap); seed tidak lagi me-reset PIN Admin ke ADMIN_PIN.
-
 
 
 

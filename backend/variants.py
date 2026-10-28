@@ -25,15 +25,29 @@ class VariantIn(BaseModel):
     ingredients: List[IngredientIn] = Field(min_length=1)
 
 
-@router.post("/menu-variants")
-async def create_menu_variant(body: VariantIn, _: User = Depends(ADMIN)):
-    if not await db.products.find_one({"_id": body.product_id}):
-        raise HTTPException(404, "Menu tidak ditemukan")
-    mids = list({i.inventory_id for i in body.ingredients})
-    if len(mids) != len(body.ingredients):
+class VariantUpdateIn(BaseModel):
+    variant_name: str = Field(min_length=1, max_length=100)
+    additional_price: int = Field(0, ge=0)
+    ingredients: List[IngredientIn] = Field(min_length=1)
+
+
+async def validate_ingredients(ingredients: List[IngredientIn]):
+    mids = list({i.inventory_id for i in ingredients})
+    if len(mids) != len(ingredients):
         raise HTTPException(400, "Bahan baku yang sama dipilih lebih dari sekali")
     if await db.inventory.count_documents({"_id": {"$in": mids}, "type": "Bahan Baku"}) != len(mids):
         raise HTTPException(400, "Ada bahan baku yang tidak ditemukan di inventory (kategori Bahan Baku)")
+
+
+async def validate_variant_data(product_id: str, ingredients: List[IngredientIn]):
+    if not await db.products.find_one({"_id": {"$in": product_keys(product_id)}}):
+        raise HTTPException(404, "Menu tidak ditemukan")
+    await validate_ingredients(ingredients)
+
+
+@router.post("/menu-variants")
+async def create_menu_variant(body: VariantIn, _: User = Depends(ADMIN)):
+    await validate_variant_data(body.product_id, body.ingredients)
     await db.connect()
     async with db.pool.acquire() as con, con.transaction():
         vid = await con.fetchval("insert into menu_variants (product_id, variant_name, additional_price) values ($1, $2, $3) returning id",
@@ -70,6 +84,119 @@ async def list_menu_variants(product_id: str, _: User = Depends(ANY)):
                     "additional_price": r.get("additional_price") or 0,
                     "available": min(caps) if caps else None})
     return out
+
+
+@router.get("/products/{product_id}/variants")
+async def get_product_variants(product_id: str, _: User = Depends(ANY)):
+    await db.connect()
+    rows = await db.pool.fetch(
+        """
+        select mv.id, mv.product_id, mv.variant_name, mv.additional_price,
+               vi.inventory_id, vi.qty_needed, i.name as inventory_name
+        from menu_variants mv
+        left join variant_ingredients vi on vi.variant_id = mv.id
+        left join inventory i on i.id = vi.inventory_id
+        where mv.product_id = any($1::text[])
+        order by mv.id, vi.inventory_id
+        """,
+        product_keys(product_id),
+    )
+    variants = {}
+    for row in rows:
+        variant = variants.setdefault(
+            row["id"],
+            {
+                "id": row["id"],
+                "product_id": row["product_id"],
+                "variant_name": row["variant_name"],
+                "additional_price": row["additional_price"] or 0,
+                "ingredients": [],
+            },
+        )
+        if row["inventory_id"] is not None:
+            variant["ingredients"].append(
+                {
+                    "inventory_id": row["inventory_id"],
+                    "inventory_name": row["inventory_name"],
+                    "qty_needed": float(row["qty_needed"]),
+                }
+            )
+    return list(variants.values())
+
+
+@router.post("/variants")
+async def create_variant(body: VariantIn, _: User = Depends(ADMIN)):
+    await validate_variant_data(body.product_id, body.ingredients)
+    variant_name = body.variant_name.strip()
+    if not variant_name:
+        raise HTTPException(422, "Nama varian wajib diisi")
+
+    await db.connect()
+    async with db.pool.acquire() as con, con.transaction():
+        variant_id = await con.fetchval(
+            """
+            insert into menu_variants (product_id, variant_name, additional_price)
+            values ($1, $2, $3)
+            returning id
+            """,
+            body.product_id,
+            variant_name,
+            body.additional_price,
+        )
+        await con.executemany(
+            "insert into variant_ingredients (variant_id, inventory_id, qty_needed) values ($1, $2, $3)",
+            [(variant_id, item.inventory_id, item.qty_needed) for item in body.ingredients],
+        )
+    return {
+        "id": variant_id,
+        "product_id": body.product_id,
+        "variant_name": variant_name,
+        "additional_price": body.additional_price,
+        "ingredients": [item.model_dump() for item in body.ingredients],
+    }
+
+
+@router.put("/variants/{variant_id}")
+async def update_variant(variant_id: int, body: VariantUpdateIn, _: User = Depends(ADMIN)):
+    await validate_ingredients(body.ingredients)
+    variant_name = body.variant_name.strip()
+    if not variant_name:
+        raise HTTPException(422, "Nama varian wajib diisi")
+
+    await db.connect()
+    async with db.pool.acquire() as con, con.transaction():
+        existing = await con.fetchrow("select id from menu_variants where id = $1 for update", variant_id)
+        if not existing:
+            raise HTTPException(404, "Varian tidak ditemukan")
+        await con.execute(
+            "update menu_variants set variant_name = $2, additional_price = $3 where id = $1",
+            variant_id,
+            variant_name,
+            body.additional_price,
+        )
+        await con.execute("delete from variant_ingredients where variant_id = $1", variant_id)
+        await con.executemany(
+            "insert into variant_ingredients (variant_id, inventory_id, qty_needed) values ($1, $2, $3)",
+            [(variant_id, item.inventory_id, item.qty_needed) for item in body.ingredients],
+        )
+    return {
+        "id": variant_id,
+        "variant_name": variant_name,
+        "additional_price": body.additional_price,
+        "ingredients": [item.model_dump() for item in body.ingredients],
+    }
+
+
+@router.delete("/variants/{variant_id}")
+async def delete_variant(variant_id: int, _: User = Depends(ADMIN)):
+    await db.connect()
+    async with db.pool.acquire() as con, con.transaction():
+        exists = await con.fetchval("select 1 from menu_variants where id = $1 for update", variant_id)
+        if not exists:
+            raise HTTPException(404, "Varian tidak ditemukan")
+        await con.execute("delete from variant_ingredients where variant_id = $1", variant_id)
+        await con.execute("delete from menu_variants where id = $1", variant_id)
+    return {"message": "Varian berhasil dihapus", "id": variant_id}
 
 
 async def load_variants(ids: List[int]) -> dict:
