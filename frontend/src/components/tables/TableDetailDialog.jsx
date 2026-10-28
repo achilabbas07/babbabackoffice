@@ -117,7 +117,8 @@ export const TableDetailDialog = ({ table, tables, onClose, onChanged, onPaid })
                 <Action testid="action-merge" icon={Merge} label="Gabung Meja" onClick={() => setMode("merge")} />
                 <Action testid="action-move" icon={MoveRight} label="Pindah Meja" onClick={() => setMode("move")} />
                 <Action testid="action-print-bill" icon={Printer} label="Cetak Bill" onClick={() => setMode("printBill")} />
-                <Action testid="action-print-kitchen" icon={ChefHat} label="Cetak Dapur" onClick={() => setMode("printKitchen")} />
+                <Action testid="action-print-kitchen" icon={ChefHat} label="Cetak Dapur" lock={!isAdmin}
+                  onClick={() => setMode(isAdmin ? "printKitchen" : "pinKitchen")} />
                 <Action testid="action-void" icon={Ban} label="Void" lock={!isAdmin} tone="text-destructive hover:border-destructive" onClick={() => setMode("void")} />
               </div>
             </div>
@@ -156,6 +157,9 @@ export const TableDetailDialog = ({ table, tables, onClose, onChanged, onPaid })
         options={others.filter((t) => t.status !== "occupied")}
         onPick={(t) => run(async () => { await api.post(`/open-bills/${bill.id}/move`, { tableId: t.id }); setMode(null); onClose(); }, `Pesanan dipindah ke ${t.name}`)} />
       <PrintTicketDialog bill={bill} tableName={table?.name} mode={mode === "printBill" ? "bill" : mode === "printKitchen" ? "kitchen" : null} onClose={() => setMode(null)} />
+      <AdminPinDialog open={mode === "pinKitchen"} onClose={() => setMode(null)} testid="kitchen-pin" needPin
+        title="Otorisasi Cetak Dapur" description="Masukkan PIN admin untuk mencetak order dapur."
+        onSubmit={async ({ pin }) => { await api.post("/auth/verify-admin", { pin }); setMode("printKitchen"); }} />
       <AdminPinDialog open={mode === "void"} onClose={() => setMode(null)} testid="void-pin" needPin={!isAdmin} withReason title={`Void ${bill?.id || ""}`}
         description="Bill dihapus dan meja dikosongkan. Tindakan tercatat di log void."
         onSubmit={async ({ pin, reason }) => { await api.post(`/open-bills/${bill.id}/void`, { adminPin: pin || null, reason }); toast.success("Bill di-void"); setMode(null); onClose(); onChanged(); }} />

@@ -7,6 +7,7 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { NAV } from "@/lib/nav";
 import { ROLE_LABEL } from "@/lib/api";
 import { ShiftGate } from "@/components/ShiftGate";
+import { WaiterPrinterButton } from "@/components/WaiterPrinterButton";
 
 const Clock = () => {
   const [now, setNow] = useState(new Date());
@@ -89,6 +90,7 @@ export default function Layout() {
             <div className="md:hidden"><Brand /></div>
             <div className="hidden sm:block"><Clock /></div>
             <div className="flex items-center gap-3">
+              {user.role === "waiter" && <WaiterPrinterButton />}
               <FullscreenButton />
               <div className="text-right leading-tight">
                 <p data-testid="header-user-name" className="text-sm font-semibold">{user.name}</p>
