@@ -7,8 +7,7 @@ Latest request: "Lanjutkan implementasi kode berdasarkan tabel 'menu_variants', 
 
 ## Architecture
 - FastAPI + React, PostgreSQL (Supabase, transaction pooler) via `pgdb.py` (Mongo-like wrapper over asyncpg).
-- Inventory stock deduction/addition & loyalty via Supabase triggers (transactions/purchases insert).
-- Variant raw materials handled in `backend/variants.py` (check before insert, deduct after transaction insert).
+- Checkout invoice persistence and regular/variant stock reduction via PostgreSQL RPC `proses_checkout_dan_stok_fleksibel`, which allows inventory stock to go negative; purchase stock updates and loyalty retain their database triggers.
 
 ## Implemented
 - POS core, tables canvas (merge/split/move), Admin PIN auth, shifts (blind close), waiter targets, promos & points, Supabase migration.
@@ -43,7 +42,7 @@ Latest request: "Lanjutkan implementasi kode berdasarkan tabel 'menu_variants', 
 
 ## 2026-10-19 — Varian hibrida (skema Supabase baru)
 - menu_variants kini pakai `product_id` (text); raw_materials pakai `stock`. Endpoint `GET /api/menu-variants?product_id=`.
-- Checkout: item tanpa variantId → logika stok lama (cek resep + trigger transactions_consume_stock). Item dengan variantId → dilewati dari logika lama (trigger transaksi di-skip untuk variantId), lalu INSERT order_logs (source=variant_sale, variant_id) → trigger `kurangi_stok_bahan` memotong raw_materials.
+- Checkout uses the PostgreSQL RPC `proses_checkout_dan_stok_fleksibel` to persist invoice and reduce stock; the legacy transaction stock trigger and separate variant-sale stock log are removed from the checkout path.
 - Skrip trigger: backend/scripts/variant_stock_bypass.py; cek e2e: backend/tests/variant_checkout_check.py (data TEST dibersihkan otomatis).
 
 ## 2026-10-19 — Admin - Tambah Varian
@@ -85,8 +84,5 @@ Latest request: "Lanjutkan implementasi kode berdasarkan tabel 'menu_variants', 
 ## 2026-10-26 — Bug: halaman login kosong (502)
 - Penyebab: PIN Admin & KASIR PAGI diisi teks biasa langsung di Supabase → bcrypt "Invalid salt" saat startup → backend gagal start.
 - Fix: verify_pin aman untuk nilai non-hash; startup meng-hash PIN teks biasa (nilai tetap); seed tidak lagi me-reset PIN Admin ke ADMIN_PIN.
-
-
-
 
 

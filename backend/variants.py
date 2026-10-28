@@ -1,12 +1,11 @@
 import re
-import uuid
 from collections import defaultdict
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from core import User, db, now_iso, require_roles
+from core import User, db, require_roles
 
 router = APIRouter(prefix="/api")
 ANY = require_roles("admin", "kasir", "waiter")
@@ -238,13 +237,3 @@ async def check_materials(items: List[dict]):
         m = mats.get(mid)
         if not m:
             raise HTTPException(400, f"Bahan baku {mid} tidak ditemukan di inventory")
-
-
-async def log_variant_sales(items: List[dict], ref: str, waiter_id, waiter_name: str):
-    ts = now_iso()
-    docs = [{"_id": str(uuid.uuid4()), "timestamp": ts, "waiterId": waiter_id, "waiterName": waiter_name or "",
-             "productId": it["productId"], "productName": it.get("variantName") or it["productName"],
-             "qty": it["qty"], "source": "variant_sale", "refId": ref, "shiftId": None, "variant_id": it["variantId"]}
-            for it in items if it.get("variantId") is not None and it["qty"] > 0]
-    if docs:
-        await db.order_logs.insert_many(docs)

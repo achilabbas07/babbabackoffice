@@ -7,9 +7,10 @@ from seed import seed_all
 from shifts import router as shifts_router, get_open_shift
 from targets import router as targets_router, log_order_diff, resolve_waiter
 from discounts import router as discounts_router, promo_discount, points_discount
-from variants import router as variants_router, load_variants, check_materials, log_variant_sales, product_num, variant_hpp
+from variants import router as variants_router, load_variants, check_materials, product_num, variant_hpp
 
 import logging
+import asyncpg
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import List, Literal, Optional
@@ -187,32 +188,6 @@ async def build_items(items: List[OrderItemIn], order_type: str):
                     "notes": i.notes, "subtotal": price * i.qty, "variantId": i.variantId,
                     "variantName": v["variant_name"] if v else "", "variantPrice": extra})
     return out, sum(x["subtotal"] for x in out)
-
-
-async def stock_needs(items: List[dict]) -> dict:
-    pids = list({i["productId"] for i in items})
-    by_prod = defaultdict(list)
-    async for r in db.recipes.find({"productId": {"$in": pids}}):
-        by_prod[r["productId"]].append(r)
-    direct = {d["_id"]: d.get("inventoryId") async for d in db.products.find({"_id": {"$in": pids}})}
-    needs = defaultdict(float)
-    for it in items:
-        if it.get("variantId") is not None:
-            continue
-        if by_prod.get(it["productId"]):
-            for r in by_prod[it["productId"]]:
-                needs[r["inventoryId"]] += r["qty_needed"] * it["qty"]
-        elif direct.get(it["productId"]):
-            needs[direct[it["productId"]]] += it["qty"]
-    return needs
-
-
-async def consume_stock(needs: dict):
-    inv = {d["_id"]: d async for d in db.inventory.find({"_id": {"$in": list(needs)}})}
-    for inv_id, qty in needs.items():
-        d = inv.get(inv_id)
-        if not d:
-            raise HTTPException(400, f"Bahan {inv_id} tidak ditemukan di inventory")
 
 
 async def occupy_table(table_id: str, bill: OpenBill):
@@ -730,9 +705,6 @@ async def create_transaction(body: TransactionIn, request: Request, user: User =
         raise HTTPException(400, "Uang tunai kurang dari total")
     cash = body.cashGiven if body.method == "Cash" else total
 
-    await consume_stock(await stock_needs(items))
-    await check_materials(items)
-
     if body.waiterId:
         wid, wname = await resolve_waiter(body.waiterId, "", user)
     elif bill:
@@ -749,8 +721,16 @@ async def create_transaction(body: TransactionIn, request: Request, user: User =
         tableName=table["name"] if table else "",
         customerName=customer["name"] if customer else (body.customerName or (bill.customerName if bill else "")),
     )
-    await db.transactions.insert_one(trx.to_mongo())
-    await log_variant_sales(items, trx.id, wid, wname)
+    try:
+        await db.connect()
+        await db.pool.fetchval(
+            "select proses_checkout_dan_stok_fleksibel($1::jsonb, $2::jsonb)",
+            trx.model_dump(),
+            items,
+        )
+    except asyncpg.PostgresError as err:
+        message = getattr(err, "message", None) or str(err)
+        raise HTTPException(400, f"Checkout gagal: {message}") from err
     if not body.partial:
         old_items, old_w = (bill.items_json, (bill.waiterId, bill.waiterName)) if bill else ([], (None, ""))
         await log_order_diff(old_items, old_w, items, (wid, wname), "payment" if bill else "direct", trx.id)

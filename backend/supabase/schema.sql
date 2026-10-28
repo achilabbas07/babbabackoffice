@@ -162,31 +162,9 @@ end $$;
 drop trigger if exists inventory_cost_hpp on inventory;
 create trigger inventory_cost_hpp after update of cost_per_unit on inventory for each row execute function trg_inventory_cost_hpp();
 
--- ---------- 4. Stok bahan berkurang otomatis saat transaksi ----------
--- Per item: jika produk punya resep -> stok -= qty_needed * qty; jika tidak & ada inventoryId -> stok -= qty.
--- Stok tidak cukup -> transaksi DIBATALKAN (check stock >= 0).
-create or replace function trg_transactions_consume_stock() returns trigger language plpgsql as $$
-declare it jsonb; v_qty numeric; v_pid text;
-begin
-  for it in select * from jsonb_array_elements(new.items_json) loop
-    -- Item varian dipotong oleh trigger order_logs (kurangi_stok_bahan)
-    if it->>'variantId' is not null then continue; end if;
-    v_pid := it->>'productId';
-    v_qty := (it->>'qty')::numeric;
-    if exists (select 1 from recipes where "productId" = v_pid) then
-      update inventory i set stock = i.stock - r.qty_needed * v_qty
-        from recipes r where r."productId" = v_pid and i.id = r."inventoryId";
-    else
-      update inventory set stock = stock - v_qty
-        where id = (select "inventoryId" from products where id = v_pid);
-    end if;
-  end loop;
-  return new;
-exception when check_violation then
-  raise exception 'Stok bahan tidak cukup untuk transaksi %', new.id;
-end $$;
+-- Checkout and stock reduction are handled atomically by proses_checkout_dan_stok_fleksibel.
 drop trigger if exists transactions_consume_stock on transactions;
-create trigger transactions_consume_stock after insert on transactions for each row execute function trg_transactions_consume_stock();
+drop function if exists trg_transactions_consume_stock();
 
 -- ---------- 5. Stok bertambah & biaya diperbarui saat pembelian ----------
 create or replace function trg_purchases_add_stock() returns trigger language plpgsql as $$
