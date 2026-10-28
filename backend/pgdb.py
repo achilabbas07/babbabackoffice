@@ -141,7 +141,7 @@ class Collection:
         rows = await self.db.pool.fetch(f"select distinct {q(col)} as v from {q(self.name)} where {self.where(flt, args)}", *args)
         return [r["v"] for r in rows]
 
-    async def insert_one(self, doc):
+    async def insert_one(self, doc, connection=None):
         await self.db.connect()
         cols, args = [], []
         for k, v in doc.items():
@@ -152,8 +152,9 @@ class Collection:
             cols.append(col)
             args.append(self.enc(col, v))
         sql = f"insert into {q(self.name)} ({', '.join(q(c) for c in cols)}) values ({', '.join(f'${i + 1}' for i in range(len(cols)))})"
+        executor = connection if connection is not None else self.db.pool
         try:
-            await self.db.pool.execute(sql, *args)
+            await executor.execute(sql, *args)
         except (asyncpg.RaiseError, asyncpg.CheckViolationError) as e:
             _db_error(e)
         return Result(1)
