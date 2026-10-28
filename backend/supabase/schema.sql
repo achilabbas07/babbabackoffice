@@ -288,6 +288,17 @@ create index if not exists order_logs_shift_idx on order_logs("shiftId");
 
 create table if not exists counters (id text primary key, seq bigint not null default 0);
 create table if not exists meta (id text primary key);
+create table if not exists app_profile (
+  id              integer primary key check (id = 1),
+  app_name        text not null default '',
+  logo_url        text not null default '',
+  address         text not null default '',
+  phone           text not null default '',
+  additional_info text not null default '',
+  "printerDapur"  text not null default '',
+  "printerKasir"  text not null default '',
+  "cetakOtomatis" boolean not null default false
+);
 create table if not exists login_attempts (identifier text primary key, count integer not null default 0, locked_until timestamptz);
 
 alter table shifts         enable row level security;
@@ -298,4 +309,5 @@ alter table waiter_shifts  enable row level security;
 alter table order_logs     enable row level security;
 alter table counters       enable row level security;
 alter table meta           enable row level security;
+alter table app_profile    enable row level security;
 alter table login_attempts enable row level security;
