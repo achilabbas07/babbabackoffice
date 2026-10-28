@@ -19,6 +19,26 @@ export default function Cash() {
   const [dialog, setDialog] = useState(null);
   const [closing, setClosing] = useState(false);
   const [categories, setCategories] = useState([]);
+  const [connectingPrinter, setConnectingPrinter] = useState("");
+
+  const connectPrinter = async (field, label) => {
+    if (!navigator.bluetooth?.requestDevice) {
+      toast.error("Browser ini tidak mendukung Web Bluetooth. Gunakan browser yang kompatibel melalui HTTPS.");
+      return;
+    }
+
+    setConnectingPrinter(field);
+    try {
+      const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true });
+      if (!device.name) throw new Error("Nama perangkat Bluetooth tidak tersedia.");
+      await api.put("/app-profile/printers", { [field]: device.name });
+      toast.success(`${label} tersimpan: ${device.name}`);
+    } catch (err) {
+      toast.error(err.name === "NotFoundError" ? "Pemilihan perangkat dibatalkan." : errMsg(err));
+    } finally {
+      setConnectingPrinter("");
+    }
+  };
 
   useEffect(() => {
     if (dialog === "out") {
@@ -59,6 +79,12 @@ export default function Cash() {
       <PageHeader title="Kas & Shift" subtitle={`Shift ${shift.id} · dibuka ${fmtDate(shift.openedAt)} oleh ${shift.userName}`}>
         <Button data-testid="cash-in-button" variant="outline" onClick={() => setDialog("in")}><ArrowDownCircle className="mr-1 h-4 w-4 text-emerald-600" />Kas Masuk</Button>
         <Button data-testid="cash-out-button" variant="outline" onClick={() => setDialog("out")}><ArrowUpCircle className="mr-1 h-4 w-4 text-destructive" />Kas Keluar</Button>
+        <Button data-testid="connect-cash-printer-button" variant="outline" size="sm" disabled={!!connectingPrinter} onClick={() => connectPrinter("printerKasir", "Printer Kasir")}>
+          {connectingPrinter === "printerKasir" ? "Menghubungkan..." : "🔗 Printer Kasir"}
+        </Button>
+        <Button data-testid="connect-kitchen-printer-button" variant="outline" size="sm" disabled={!!connectingPrinter} onClick={() => connectPrinter("printerDapur", "Printer Dapur")}>
+          {connectingPrinter === "printerDapur" ? "Menghubungkan..." : "🔗 Printer Dapur"}
+        </Button>
         <Button data-testid="close-shift-button" onClick={() => setClosing(true)}><Lock className="mr-1 h-4 w-4" />Tutup Kasir</Button>
       </PageHeader>
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
