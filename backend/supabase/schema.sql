@@ -60,7 +60,7 @@ create table if not exists tables (
   area         text not null,
   status       text not null default 'available' check (status in ('available','occupied','paid','reserved')),
   "orderData"  jsonb,                                -- {openBillId, customerName, waiterName, total, itemCount, startTime}
-  "open_bill_id" text references open_bills(id) on delete set null,
+  "open_bill_id" text,
   kind         text not null default 'table' check (kind in ('table','fixture')),
   x            integer,
   y            integer
@@ -83,6 +83,20 @@ create table if not exists open_bills (
   "customerId"    text references customers(id) on delete set null
 );
 create index if not exists open_bills_table_idx on open_bills("tableId");
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.tables'::regclass
+      and conname = 'tables_open_bill_id_fkey'
+  ) then
+    alter table public.tables
+      add constraint tables_open_bill_id_fkey
+      foreign key ("open_bill_id") references public.open_bills(id) on delete set null;
+  end if;
+end;
+$$;
 
 create table if not exists transactions (
   id            text primary key,

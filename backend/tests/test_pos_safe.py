@@ -165,7 +165,8 @@ class TestDineIn:
         CREATED["open_bills"].append(b["id"])
         assert b["total"] == 60000 and b["waiterName"] == "Waiter Demo"
         t = [x for x in kasir.get(f"{BASE}/tables").json() if x["id"] == tid][0]
-        assert t["status"] == "occupied" and t["orderData"]["openBillId"] == b["id"]
+        assert t["status"] == "occupied"
+        assert t["open_bill_id"] == b["id"] and t["orderData"]["openBillId"] == b["id"]
         assert kasir.get(f"{BASE}/open-bills/{b['id']}").json()["items_json"][0]["notes"] == "less sugar"
         # someone else's bill on same table blocked
         assert kasir.post(f"{BASE}/open-bills", json={"type": "Dine In", "tableId": tid, "items": [{"productId": data["p1"]["id"], "qty": 1}]}).status_code == 409
@@ -179,7 +180,7 @@ class TestDineIn:
         assert trx["change"] == 40000 and trx["waiterName"] == "Waiter Demo" and trx["tableName"] == "TEST_Meja"
         assert kasir.get(f"{BASE}/open-bills/{b['id']}").status_code == 404
         t = [x for x in kasir.get(f"{BASE}/tables").json() if x["id"] == tid][0]
-        assert t["status"] == "available" and t["orderData"] is None
+        assert t["status"] == "available" and t["orderData"] is None and t["open_bill_id"] is None
         c1 = [x for x in admin.get(f"{BASE}/customers").json() if x["id"] == data["c"]["id"]][0]
         assert c1["visits"] == c0["visits"] + 1 and c1["total_spent"] == c0["total_spent"] + 60000 and c1["points"] == c0["points"] + 6
 

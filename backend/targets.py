@@ -56,7 +56,7 @@ def _qty_map(items: List[dict]) -> dict:
     return m
 
 
-async def _write_logs(waiter: Tuple[Optional[str], str], deltas: dict, source: str, ref: str):
+async def _write_logs(waiter: Tuple[Optional[str], str], deltas: dict, source: str, ref: str, connection=None):
     wid, wname = waiter
     if not wid:
         return
@@ -66,17 +66,25 @@ async def _write_logs(waiter: Tuple[Optional[str], str], deltas: dict, source: s
              "productName": name, "qty": q, "source": source, "refId": ref, "shiftId": shift["_id"] if shift else None}
             for pid, (q, name) in deltas.items() if q]
     if docs:
-        await db.order_logs.insert_many(docs)
+        await db.order_logs.insert_many(docs, connection=connection)
 
 
-async def log_order_diff(old_items: List[dict], old_waiter: Tuple, new_items: List[dict], new_waiter: Tuple, source: str, ref: str):
+async def log_order_diff(
+    old_items: List[dict],
+    old_waiter: Tuple,
+    new_items: List[dict],
+    new_waiter: Tuple,
+    source: str,
+    ref: str,
+    connection=None,
+):
     old, new = _qty_map(old_items), _qty_map(new_items)
     if old_waiter[0] == new_waiter[0]:
         deltas = {pid: [new[pid][0] - old[pid][0], new[pid][1] or old[pid][1]] for pid in set(old) | set(new)}
-        await _write_logs(new_waiter, deltas, source, ref)
+        await _write_logs(new_waiter, deltas, source, ref, connection=connection)
     else:
-        await _write_logs(old_waiter, {pid: [-q, n] for pid, (q, n) in old.items()}, source, ref)
-        await _write_logs(new_waiter, dict(new), source, ref)
+        await _write_logs(old_waiter, {pid: [-q, n] for pid, (q, n) in old.items()}, source, ref, connection=connection)
+        await _write_logs(new_waiter, dict(new), source, ref, connection=connection)
 
 
 async def progress_for(shift: dict) -> dict:

@@ -23,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from starlette.middleware.cors import CORSMiddleware
 import os
@@ -197,8 +198,14 @@ async def build_items(items: List[OrderItemIn], order_type: str):
     return out, sum(x["subtotal"] for x in out)
 
 
-async def occupy_table(table_id: str, bill: OpenBill):
-    t = await get_or_404("tables", table_id, "Meja")
+async def occupy_table(table_id: str, bill: OpenBill, connection=None):
+    if connection is None:
+        t = await get_or_404("tables", table_id, "Meja")
+    else:
+        row = await connection.fetchrow('select * from "tables" where id = $1 for update', table_id)
+        if not row:
+            raise HTTPException(404, "Meja tidak ditemukan")
+        t = db.tables.decode(row)
     if t.get("kind") == "fixture":
         raise HTTPException(400, f"{t['name']} bukan meja")
     od = t.get("orderData") or {}
@@ -211,7 +218,7 @@ async def occupy_table(table_id: str, bill: OpenBill):
         "status": "occupied",
         "open_bill_id": bill.id,
         "orderData": order_data,
-    }})
+    }}, connection=connection)
 
 
 async def free_table(table_id: Optional[str]):
@@ -551,13 +558,30 @@ async def get_open_bill(bid: str, _: User = Depends(ANY)):
 
 @api.post("/open-bills")
 async def create_open_bill(body: OpenBillIn, user: User = Depends(ANY)):
-    bill = await compose_bill(body, user, await next_id("BILL"), now_iso())
-    await check_materials(bill.items_json)
-    if bill.tableId:
-        await occupy_table(bill.tableId, bill)
-    await db.open_bills.insert_one(bill.to_mongo())
-    await log_order_diff([], (None, ""), bill.items_json, (bill.waiterId, bill.waiterName), "bill_create", bill.id)
-    return bill
+    try:
+        bill = await compose_bill(body, user, await next_id("BILL"), now_iso())
+        await check_materials(bill.items_json)
+        await db.connect()
+        async with db.pool.acquire() as connection:
+            async with connection.transaction():
+                await db.open_bills.insert_one(bill.to_mongo(), connection=connection)
+                if bill.tableId:
+                    await occupy_table(bill.tableId, bill, connection=connection)
+                await log_order_diff(
+                    [],
+                    (None, ""),
+                    bill.items_json,
+                    (bill.waiterId, bill.waiterName),
+                    "bill_create",
+                    bill.id,
+                    connection=connection,
+                )
+        return bill
+    except HTTPException as err:
+        return JSONResponse(status_code=err.status_code, content={"detail": err.detail}, headers=err.headers)
+    except Exception as err:
+        logger.exception("Failed to create open bill")
+        return JSONResponse(status_code=500, content={"error": str(err)})
 
 
 async def authorize_reduction(request: Request, user: User, bill: OpenBill, items: List[OrderItemIn], admin_pin: Optional[str]):
@@ -922,10 +946,19 @@ app.include_router(targets_router)
 app.include_router(discounts_router)
 app.include_router(variants_router)
 
+configured_origins = [
+    origin.strip().rstrip("/")
+    for origin in os.environ.get("CORS_ORIGINS", "").split(",")
+    if origin.strip()
+]
+for origin in ("https://babbapos.vercel.app", "http://localhost:3000", "http://127.0.0.1:3000"):
+    if origin not in configured_origins:
+        configured_origins.append(origin)
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_origins=configured_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

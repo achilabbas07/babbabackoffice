@@ -102,6 +102,7 @@ class Table(BaseDocument):
     area: str
     status: str = "available"
     orderData: Optional[dict] = None
+    open_bill_id: Optional[str] = None
     kind: str = "table"
     x: Optional[int] = None
     y: Optional[int] = None

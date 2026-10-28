@@ -159,12 +159,12 @@ class Collection:
             _db_error(e)
         return Result(1)
 
-    async def insert_many(self, docs):
+    async def insert_many(self, docs, connection=None):
         for d in docs:
-            await self.insert_one(d)
+            await self.insert_one(d, connection=connection)
         return Result(len(docs))
 
-    async def update_one(self, flt, update, upsert=False):
+    async def update_one(self, flt, update, upsert=False, connection=None):
         await self.db.connect()
         sets, args = [], []
         for k, v in update.get("$set", {}).items():
@@ -180,7 +180,8 @@ class Collection:
         if sets:
             sql = f"update {q(self.name)} set {', '.join(sets)} where {self.where(flt, args)}"
             try:
-                n = int((await self.db.pool.execute(sql, *args)).split()[-1])
+                executor = connection if connection is not None else self.db.pool
+                n = int((await executor.execute(sql, *args)).split()[-1])
             except (asyncpg.RaiseError, asyncpg.CheckViolationError) as e:
                 _db_error(e)
         else:
@@ -189,7 +190,7 @@ class Collection:
             doc = {k: v for k, v in flt.items() if not k.startswith("$") and not isinstance(v, dict)}
             for key in ("$set", "$inc", "$setOnInsert"):
                 doc.update(update.get(key, {}))
-            await self.insert_one(doc)
+            await self.insert_one(doc, connection=connection)
         return Result(n)
 
     async def replace_one(self, flt, doc):
