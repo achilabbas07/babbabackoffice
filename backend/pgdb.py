@@ -36,7 +36,7 @@ class Cursor:
     async def to_list(self, length=None):
         await self.c.db.connect()
         args = []
-        sql = f"select * from {q(self.c.name)} where {self.c.where(self.flt, args)}"
+        sql = f"select * from {self.c.table} where {self.c.where(self.flt, args)}"
         if self.order:
             sql += " order by " + ", ".join(f"{q(k)} {'desc' if d < 0 else 'asc'}" for k, d in self.order)
         if length:
@@ -67,6 +67,10 @@ class Collection:
 
     def col(self, key):
         return self.pk if key == "_id" else key
+
+    @property
+    def table(self):
+        return f"public.{q(self.name)}"
 
     def enc(self, col, v):
         t = self.cols.get(col)
@@ -132,13 +136,13 @@ class Collection:
     async def count_documents(self, flt=None):
         await self.db.connect()
         args = []
-        return await self.db.pool.fetchval(f"select count(*) from {q(self.name)} where {self.where(flt, args)}", *args)
+        return await self.db.pool.fetchval(f"select count(*) from {self.table} where {self.where(flt, args)}", *args)
 
     async def distinct(self, field, flt=None):
         await self.db.connect()
         args = []
         col = self.col(field)
-        rows = await self.db.pool.fetch(f"select distinct {q(col)} as v from {q(self.name)} where {self.where(flt, args)}", *args)
+        rows = await self.db.pool.fetch(f"select distinct {q(col)} as v from {self.table} where {self.where(flt, args)}", *args)
         return [r["v"] for r in rows]
 
     async def insert_one(self, doc, connection=None):
@@ -151,12 +155,14 @@ class Collection:
             self._check(col)
             cols.append(col)
             args.append(self.enc(col, v))
-        sql = f"insert into {q(self.name)} ({', '.join(q(c) for c in cols)}) values ({', '.join(f'${i + 1}' for i in range(len(cols)))})"
+        sql = f"insert into {self.table} ({', '.join(q(c) for c in cols)}) values ({', '.join(f'${i + 1}' for i in range(len(cols)))})"
         executor = connection if connection is not None else self.db.pool
         try:
-            await executor.execute(sql, *args)
+            inserted = await executor.fetchval(f"{sql} returning 1", *args)
         except (asyncpg.RaiseError, asyncpg.CheckViolationError) as e:
             _db_error(e)
+        if inserted != 1:
+            raise RuntimeError(f"INSERT ke public.{self.name} tidak menghasilkan baris")
         return Result(1)
 
     async def insert_many(self, docs, connection=None):
@@ -178,7 +184,7 @@ class Collection:
             args.append(self.enc(col, v))
             sets.append(f"{q(col)} = coalesce({q(col)}, 0) + ${len(args)}")
         if sets:
-            sql = f"update {q(self.name)} set {', '.join(sets)} where {self.where(flt, args)}"
+            sql = f"update {self.table} set {', '.join(sets)} where {self.where(flt, args)}"
             try:
                 executor = connection if connection is not None else self.db.pool
                 n = int((await executor.execute(sql, *args)).split()[-1])
@@ -199,20 +205,21 @@ class Collection:
     async def find_one_and_update(self, flt, update, upsert=False, return_document=None):
         await self.db.connect()
         seq = await self.db.pool.fetchval(
-            "insert into counters (id, seq) values ($1, 1) on conflict (id) do update set seq = counters.seq + 1 returning seq", flt["_id"]
+            "insert into public.counters (id, seq) values ($1, 1) on conflict (id) do update set seq = counters.seq + 1 returning seq",
+            flt["_id"],
         )
         return {"_id": flt["_id"], "seq": seq}
 
     async def delete_one(self, flt):
         await self.db.connect()
         args = []
-        sql = f"delete from {q(self.name)} where ctid in (select ctid from {q(self.name)} where {self.where(flt, args)} limit 1)"
+        sql = f"delete from {self.table} where ctid in (select ctid from {self.table} where {self.where(flt, args)} limit 1)"
         return Result(int((await self.db.pool.execute(sql, *args)).split()[-1]))
 
     async def delete_many(self, flt):
         await self.db.connect()
         args = []
-        return Result(int((await self.db.pool.execute(f"delete from {q(self.name)} where {self.where(flt, args)}", *args)).split()[-1]))
+        return Result(int((await self.db.pool.execute(f"delete from {self.table} where {self.where(flt, args)}", *args)).split()[-1]))
 
     async def create_index(self, *args, **kwargs):
         return None

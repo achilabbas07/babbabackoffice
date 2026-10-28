@@ -202,7 +202,7 @@ async def occupy_table(table_id: str, bill: OpenBill, connection=None):
     if connection is None:
         t = await get_or_404("tables", table_id, "Meja")
     else:
-        row = await connection.fetchrow('select * from "tables" where id = $1 for update', table_id)
+        row = await connection.fetchrow('select * from public."tables" where id = $1 for update', table_id)
         if not row:
             raise HTTPException(404, "Meja tidak ditemukan")
         t = db.tables.decode(row)
@@ -569,6 +569,16 @@ async def create_open_bill(body: OpenBillIn, user: User = Depends(ANY)):
                 stage = "inserting open bill"
                 await db.open_bills.insert_one(bill.to_mongo(), connection=connection)
                 if bill.tableId:
+                    stage = "verifying inserted open bill"
+                    inserted_bill_id = await connection.fetchval(
+                        "SELECT id FROM public.open_bills WHERE id = $1",
+                        bill.id,
+                    )
+                    if inserted_bill_id != bill.id:
+                        raise RuntimeError(
+                            f"Open bill {bill.id} tidak ditemukan setelah INSERT "
+                            "pada transaksi checkout yang sama"
+                        )
                     stage = "updating table relation"
                     await occupy_table(bill.tableId, bill, connection=connection)
                 stage = "inserting waiter order log"

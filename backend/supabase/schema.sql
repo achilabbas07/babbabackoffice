@@ -93,7 +93,8 @@ begin
   ) then
     alter table public.tables
       add constraint tables_open_bill_id_fkey
-      foreign key ("open_bill_id") references public.open_bills(id) on delete set null;
+      foreign key ("open_bill_id") references public.open_bills(id) on delete set null
+      deferrable initially deferred;
   end if;
 end;
 $$;
