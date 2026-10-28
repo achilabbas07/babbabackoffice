@@ -795,15 +795,18 @@ class AppProfileIn(BaseModel):
     address: str = Field("", max_length=500)
     phone: str = Field("", max_length=50)
     additional_info: str = Field("", max_length=1000)
+    printerDapur: str = Field("", max_length=120)
+    printerKasir: str = Field("", max_length=120)
+    cetakOtomatis: bool = False
 
 
-PROFILE_FIELDS = ("app_name", "logo_url", "address", "phone", "additional_info")
+PROFILE_TEXT_FIELDS = ("app_name", "logo_url", "address", "phone", "additional_info", "printerDapur", "printerKasir")
 
 
 @api.get("/app-profile")
 async def get_app_profile(_: User = Depends(ANY)):
     d = await db.app_profile.find_one({"_id": 1}) or {}
-    return {k: d.get(k) or "" for k in PROFILE_FIELDS}
+    return {**{k: d.get(k) or "" for k in PROFILE_TEXT_FIELDS}, "cetakOtomatis": bool(d.get("cetakOtomatis", False))}
 
 
 @api.get("/app-profile/branding")
@@ -814,7 +817,8 @@ async def get_app_branding():
 
 @api.put("/app-profile")
 async def update_app_profile(body: AppProfileIn, _: User = Depends(ADMIN)):
-    data = {k: getattr(body, k).strip() for k in PROFILE_FIELDS}
+    data = {k: getattr(body, k).strip() for k in PROFILE_TEXT_FIELDS}
+    data["cetakOtomatis"] = body.cetakOtomatis
     await db.app_profile.update_one({"_id": 1}, {"$set": data}, upsert=True)
     return data
 

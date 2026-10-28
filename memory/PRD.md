@@ -26,7 +26,7 @@ Latest request: "Lanjutkan implementasi kode berdasarkan tabel 'menu_variants', 
 
 - 2026-10-18: Expenses form uses "Kategori Pengeluaran" dropdown from Supabase `expense_categories` (GET /api/expense-categories). POST /api/expenses now takes `category_id` (int, validated) and stores both `category_id` and category name in `expenses`.
 
-- 2026-10-18: Profil Usaha page (/profile, admin) edits `app_profile` (id=1: app_name, logo_url) via GET/PUT /api/app-profile. Header/sidebar brand, receipt (Struk), Bill and Kitchen ticket headers use profile name + logo (Coffee icon fallback when empty/broken).
+- 2026-10-18: Profil Usaha page (/profile, admin) edits `app_profile` via GET/PUT /api/app-profile, including app_name, logo_url, address, phone, additional_info, printerDapur, printerKasir, and cetakOtomatis. Header/sidebar brand, receipt (Struk), Bill and Kitchen ticket headers use profile name + logo (Coffee icon fallback when empty/broken).
 
 - 2026-10-18: Profil Usaha extended: address, phone, additional_info. Receipt (paid) header: logo, name, address, phone; footer: additional_info + "Terima Kasih Atas Kunjungan Anda". Unpaid Bill print: same header + additional_info (no thank-you). Kitchen ticket header only "ORDER DAPUR" (bold uppercase).
 
@@ -80,7 +80,6 @@ Latest request: "Lanjutkan implementasi kode berdasarkan tabel 'menu_variants', 
 ## 2026-10-26 — Bug: halaman login kosong (502)
 - Penyebab: PIN Admin & KASIR PAGI diisi teks biasa langsung di Supabase → bcrypt "Invalid salt" saat startup → backend gagal start.
 - Fix: verify_pin aman untuk nilai non-hash; startup meng-hash PIN teks biasa (nilai tetap); seed tidak lagi me-reset PIN Admin ke ADMIN_PIN.
-
 
 
 

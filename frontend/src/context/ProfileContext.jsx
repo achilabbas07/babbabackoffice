@@ -3,7 +3,16 @@ import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 
 export const DEFAULT_APP_NAME = "POS Warkop Babba";
-const EMPTY = { app_name: "", logo_url: "", address: "", phone: "", additional_info: "" };
+const EMPTY = {
+  app_name: "",
+  logo_url: "",
+  address: "",
+  phone: "",
+  additional_info: "",
+  printerDapur: "",
+  printerKasir: "",
+  cetakOtomatis: false,
+};
 const ProfileContext = createContext({ profile: EMPTY, setProfile: () => {} });
 
 export const ProfileProvider = ({ children }) => {

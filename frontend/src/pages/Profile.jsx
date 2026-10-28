@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const FIELDS = [
   { name: "app_name", label: "Nama Usaha", required: true, maxLength: 120 },
@@ -16,6 +17,8 @@ const FIELDS = [
   { name: "address", label: "Alamat", textarea: true, maxLength: 500 },
   { name: "phone", label: "No. Telepon", type: "tel", placeholder: "08xx-xxxx-xxxx", maxLength: 50 },
   { name: "additional_info", label: "Keterangan Tambahan", textarea: true, hint: "Tampil di bagian bawah struk, misal info Wi-Fi atau jam buka.", maxLength: 1000 },
+  { name: "printerDapur", label: "Nama/Mac Printer Dapur", maxLength: 120 },
+  { name: "printerKasir", label: "Nama/Mac Printer Kasir", maxLength: 120 },
 ];
 
 const ProfileField = ({ f, value, onChange }) => {
@@ -57,6 +60,15 @@ export default function Profile() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <form onSubmit={save} data-testid="profile-form" className="grid gap-5 rounded-2xl border border-border bg-card p-5 sm:p-6">
           {FIELDS.map((f) => <ProfileField key={f.name} f={f} value={form[f.name]} onChange={(v) => setForm((s) => ({ ...s, [f.name]: v }))} />)}
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="cetakOtomatis"
+              data-testid="profile-cetakOtomatis-checkbox"
+              checked={!!form.cetakOtomatis}
+              onCheckedChange={(checked) => setForm((s) => ({ ...s, cetakOtomatis: checked === true }))}
+            />
+            <Label htmlFor="cetakOtomatis">Cetak Struk Otomatis (Kasir)</Label>
+          </div>
           <div>
             <Button data-testid="profile-save-button" type="submit" disabled={saving}><Save className="mr-1 h-4 w-4" />{saving ? "Menyimpan..." : "Simpan"}</Button>
           </div>
