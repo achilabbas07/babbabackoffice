@@ -558,15 +558,20 @@ async def get_open_bill(bid: str, _: User = Depends(ANY)):
 
 @api.post("/open-bills")
 async def create_open_bill(body: OpenBillIn, user: User = Depends(ANY)):
+    stage = "preparing bill"
     try:
         bill = await compose_bill(body, user, await next_id("BILL"), now_iso())
+        stage = "checking variant ingredients"
         await check_materials(bill.items_json)
         await db.connect()
         async with db.pool.acquire() as connection:
             async with connection.transaction():
+                stage = "inserting open bill"
                 await db.open_bills.insert_one(bill.to_mongo(), connection=connection)
                 if bill.tableId:
+                    stage = "updating table relation"
                     await occupy_table(bill.tableId, bill, connection=connection)
+                stage = "inserting waiter order log"
                 await log_order_diff(
                     [],
                     (None, ""),
@@ -580,8 +585,11 @@ async def create_open_bill(body: OpenBillIn, user: User = Depends(ANY)):
     except HTTPException as err:
         return JSONResponse(status_code=err.status_code, content={"detail": err.detail}, headers=err.headers)
     except Exception as err:
-        logger.exception("Failed to create open bill")
-        return JSONResponse(status_code=500, content={"error": str(err)})
+        logger.exception("Failed to create open bill during %s", stage)
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(err), "stage": stage},
+        )
 
 
 async def authorize_reduction(request: Request, user: User, bill: OpenBill, items: List[OrderItemIn], admin_pin: Optional[str]):

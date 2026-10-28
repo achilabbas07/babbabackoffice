@@ -22,12 +22,14 @@ api.interceptors.response.use(
 );
 
 export function errMsg(e) {
-  const detail = e?.response?.data?.detail;
+  const data = e?.response?.data;
+  const detail = data?.error ?? data?.detail;
+  const stage = typeof data?.stage === "string" ? ` (${data.stage})` : "";
   if (detail == null) return e?.message || "Terjadi kesalahan. Silakan coba lagi.";
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail)) return detail.map((d) => (d && typeof d.msg === "string" ? d.msg : JSON.stringify(d))).join(" ");
-  if (typeof detail.msg === "string") return detail.msg;
-  return String(detail);
+  if (typeof detail === "string") return `${detail}${stage}`;
+  if (Array.isArray(detail)) return `${detail.map((d) => (d && typeof d.msg === "string" ? d.msg : JSON.stringify(d))).join(" ")}${stage}`;
+  if (typeof detail.msg === "string") return `${detail.msg}${stage}`;
+  return `${String(detail)}${stage}`;
 }
 
 const rpFmt = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
