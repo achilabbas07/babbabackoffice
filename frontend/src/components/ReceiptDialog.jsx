@@ -1,9 +1,12 @@
 import { Printer } from "lucide-react";
+import { useState } from "react";
+import { flushSync } from "react-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { fmtDate, itemName, rp } from "@/lib/api";
 import { printDocument } from "@/lib/print";
 import { useProfile } from "@/context/ProfileContext";
 import { BrandLogo } from "@/components/BrandLogo";
+import { buildPaidReceiptLines, incrementPrintCount, printCountKey, readPrintCount, wrapPrintText } from "@/lib/thermalPrint";
 
 export const PrintHeader = ({ profile: override, testid }) => {
   const ctx = useProfile().profile;
@@ -30,57 +33,57 @@ export const PrintFooter = ({ profile: override, paid }) => {
   );
 };
 
-const Row = ({ label, value, bold, testid }) => (
-  <div className={`flex justify-between gap-4 ${bold ? "font-semibold" : ""}`}>
-    <span className="text-muted-foreground">{label}</span>
-    <span data-testid={testid} className="text-right font-mono">{value}</span>
-  </div>
-);
+const ThermalBusinessHeader = ({ testid }) => {
+  const { profile } = useProfile();
+  const lines = [
+    ...wrapPrintText(profile.app_name || "Kedai POS"),
+    ...(profile.address ? wrapPrintText(profile.address) : []),
+    ...(profile.phone ? wrapPrintText(`Telp. ${profile.phone}`) : []),
+  ];
+  return (
+    <div className="flex flex-col items-center text-center">
+      <BrandLogo url={profile.logo_url} className="h-12 w-12" iconClass="h-6 w-6" testid={`${testid}-logo`} />
+      <pre data-testid={testid} className="thermal-lines mt-1 font-bold">{lines.join("\n")}</pre>
+    </div>
+  );
+};
 
-export const ReceiptDialog = ({ trx, onClose }) => (
-  <Dialog open={!!trx} onOpenChange={(o) => !o && onClose()}>
-    <DialogContent data-testid="receipt-dialog" className="max-h-[90vh] overflow-y-auto sm:max-w-sm">
-      <DialogHeader><DialogTitle>Struk Pembayaran</DialogTitle></DialogHeader>
-      {trx && (
-        <div className="print-area space-y-4 text-sm">
-          <div className="text-center">
-            <PrintHeader testid="receipt-header" />
-            <p data-testid="receipt-id" className="font-mono text-xs text-muted-foreground">{trx.id}</p>
-            <p className="text-xs text-muted-foreground">{fmtDate(trx.date)}</p>
+export const ReceiptDialog = ({ trx, onClose }) => {
+  const [, setPrintRevision] = useState(0);
+  const printKey = printCountKey("receipt", trx?.id);
+  const printCount = readPrintCount(printKey);
+  const lines = trx ? buildPaidReceiptLines({
+    trx,
+    printCount,
+    dateText: fmtDate(trx.date),
+    currency: rp,
+    itemName,
+  }) : [];
+
+  const handlePrint = () => {
+    const count = incrementPrintCount(printKey);
+    flushSync(() => setPrintRevision(count));
+    printDocument("struk pembayaran");
+  };
+
+  return (
+    <Dialog open={!!trx} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent data-testid="receipt-dialog" className="max-h-[90vh] overflow-y-auto sm:max-w-sm">
+        <DialogHeader><DialogTitle>Struk Pembayaran</DialogTitle></DialogHeader>
+        {trx && (
+          <div className="print-area thermal-print-area space-y-3 text-sm">
+            <ThermalBusinessHeader testid="receipt-header" />
+            <pre data-testid="receipt-template" className="thermal-lines">{lines.join("\n")}</pre>
+            <button
+              data-testid="receipt-print-button"
+              onClick={handlePrint}
+              className="no-print flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border font-medium hover:border-primary"
+            >
+              <Printer className="h-4 w-4" /> Cetak Struk
+            </button>
           </div>
-          <div className="space-y-1 border-y border-dashed border-border py-3 text-xs">
-            <Row label="Tipe" value={trx.type} />
-            {trx.tableName && <Row label="Meja" value={trx.tableName} />}
-            {trx.customerName && <Row label="Pelanggan" value={trx.customerName} />}
-            <Row label="Kasir" value={trx.userName || trx.userId} />
-            {trx.waiterName && <Row label="Waiter" value={trx.waiterName} />}
-          </div>
-          <div className="space-y-2">
-            {trx.items_json.map((i, idx) => (
-              <div key={idx}>
-                <div className="flex justify-between"><span>{itemName(i)}</span><span className="font-mono">{rp(i.price * i.qty)}</span></div>
-                <p className="text-xs text-muted-foreground">{i.qty} × {rp(i.price)}{i.notes ? ` · ${i.notes}` : ""}</p>
-              </div>
-            ))}
-          </div>
-          <div className="space-y-1 border-t border-dashed border-border pt-3">
-            {trx.discount > 0 && <Row label="Subtotal" value={rp(trx.subtotal)} />}
-            {trx.promoDiscount > 0 && <Row label={`Promo ${trx.promoCode}`} value={`− ${rp(trx.promoDiscount)}`} testid="receipt-promo" />}
-            {trx.pointsDiscount > 0 && <Row label={`Tukar ${trx.pointsRedeemed} poin`} value={`− ${rp(trx.pointsDiscount)}`} testid="receipt-points" />}
-            <Row label="Total" value={rp(trx.total)} bold testid="receipt-total" />
-            <Row label={`Bayar (${trx.method})`} value={rp(trx.cashGiven)} />
-            <Row label="Kembalian" value={rp(trx.change)} testid="receipt-change" />
-          </div>
-          <PrintFooter paid />
-          <button
-            data-testid="receipt-print-button"
-            onClick={() => printDocument("struk pembayaran")}
-            className="no-print flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border font-medium hover:border-primary"
-          >
-            <Printer className="h-4 w-4" /> Cetak Struk
-          </button>
-        </div>
-      )}
-    </DialogContent>
-  </Dialog>
-);
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+};
