@@ -183,6 +183,29 @@ class TestDineIn:
         c1 = [x for x in admin.get(f"{BASE}/customers").json() if x["id"] == data["c"]["id"]][0]
         assert c1["visits"] == c0["visits"] + 1 and c1["total_spent"] == c0["total_spent"] + 60000 and c1["points"] == c0["points"] + 6
 
+    def test_pay_repairs_stale_table_owner(self, kasir, data):
+        tid = data["t"]["id"]
+        r = kasir.post(f"{BASE}/open-bills", json={"type": "Dine In", "tableId": tid,
+                                                   "items": [{"productId": data["p2"]["id"], "qty": 1}]})
+        assert r.status_code == 200, r.text
+        bill = r.json()
+        CREATED["open_bills"].append(bill["id"])
+        stale_owner_id = f"BILL-STALE-{uuid.uuid4().hex[:8]}"
+        MDB.tables.update_one({"_id": tid}, {"$set": {"orderData.openBillId": stale_owner_id}})
+
+        payload = {"type": "Dine In", "tableId": tid, "openBillId": bill["id"], "method": "Cash",
+                   "items": [{"productId": data["p2"]["id"], "qty": 1}]}
+        r = kasir.post(f"{BASE}/transactions", json={**payload, "cashGiven": 1})
+        assert r.status_code == 400
+        assert MDB.tables.find_one({"_id": tid})["orderData"]["openBillId"] == stale_owner_id
+
+        r = kasir.post(f"{BASE}/transactions", json={**payload, "cashGiven": 10000})
+        assert r.status_code == 200, r.text
+        table = kasir.get(f"{BASE}/tables").json()
+        table = next(t for t in table if t["id"] == tid)
+        assert table["status"] == "paid"
+        assert kasir.get(f"{BASE}/open-bills/{bill['id']}").status_code == 404
+
     def test_cancel_bill_frees_table(self, kasir, data):
         tid = data["t"]["id"]
         b = kasir.post(f"{BASE}/open-bills", json={"type": "Dine In", "tableId": tid, "items": [{"productId": data["p2"]["id"], "qty": 1}]}).json()

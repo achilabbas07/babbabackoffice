@@ -682,8 +682,14 @@ async def create_transaction(body: TransactionIn, request: Request, user: User =
     table_id = (body.tableId or (bill.tableId if bill else None)) if body.type == "Dine In" else None
     customer_id = body.customerId or (bill.customerId if bill else None)
     table = await get_or_404("tables", table_id, "Meja") if table_id else None
+    stale_table_occupancy = False
     if table and table["status"] == "occupied" and (table.get("orderData") or {}).get("openBillId") != (bill.id if bill else None):
-        raise HTTPException(409, f"{table['name']} sedang terisi oleh open bill lain")
+        if not bill or bill.tableId != table_id:
+            raise HTTPException(409, f"{table['name']} sedang terisi oleh open bill lain")
+        other_bill = await db.open_bills.find_one({"tableId": table_id, "_id": {"$ne": bill.id}})
+        if other_bill:
+            raise HTTPException(409, f"{table['name']} sedang terisi oleh open bill lain")
+        stale_table_occupancy = True
     customer = await get_or_404("customers", customer_id, "Pelanggan") if customer_id else None
     shift = await get_open_shift(user.id)
     if user.role == "kasir" and not shift:
@@ -737,6 +743,8 @@ async def create_transaction(body: TransactionIn, request: Request, user: User =
         old_items, old_w = (bill.items_json, (bill.waiterId, bill.waiterName)) if bill else ([], (None, ""))
         await log_order_diff(old_items, old_w, items, (wid, wname), "payment" if bill else "direct", trx.id)
     if remaining:
+        if stale_table_occupancy:
+            await free_table(table_id)
         await save_bill_items(bill, remaining)
     else:
         if bill:
