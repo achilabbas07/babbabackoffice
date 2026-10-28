@@ -850,32 +850,50 @@ PROFILE_TEXT_FIELDS = ("app_name", "logo_url", "address", "phone", "additional_i
 
 @api.get("/app-profile")
 async def get_app_profile(_: User = Depends(ANY)):
-    d = await db.app_profile.find_one({"_id": 1}) or {}
-    return {**{k: d.get(k) or "" for k in PROFILE_TEXT_FIELDS}, "cetakOtomatis": bool(d.get("cetakOtomatis", False))}
+    try:
+        d = await db.app_profile.find_one({"_id": 1}) or {}
+        return {**{k: d.get(k) or "" for k in PROFILE_TEXT_FIELDS}, "cetakOtomatis": bool(d.get("cetakOtomatis", False))}
+    except Exception as err:
+        logger.exception("Failed to load app profile")
+        return JSONResponse(status_code=500, content={"error": str(err)})
 
 
 @api.get("/app-profile/branding")
 async def get_app_branding():
-    d = await db.app_profile.find_one({"_id": 1}) or {}
-    return {"app_name": d.get("app_name") or "", "logo_url": d.get("logo_url") or ""}
+    try:
+        d = await db.app_profile.find_one({"_id": 1}) or {}
+        return {"app_name": d.get("app_name") or "", "logo_url": d.get("logo_url") or ""}
+    except Exception as err:
+        logger.exception("Failed to load app branding")
+        return JSONResponse(status_code=500, content={"error": str(err)})
 
 
 @api.put("/app-profile")
 async def update_app_profile(body: AppProfileIn, _: User = Depends(ADMIN)):
-    data = {k: getattr(body, k).strip() for k in PROFILE_TEXT_FIELDS}
-    data["cetakOtomatis"] = body.cetakOtomatis
-    await db.app_profile.update_one({"_id": 1}, {"$set": data}, upsert=True)
-    return data
+    try:
+        data = {k: getattr(body, k).strip() for k in PROFILE_TEXT_FIELDS}
+        data["cetakOtomatis"] = body.cetakOtomatis
+        await db.app_profile.update_one({"_id": 1}, {"$set": data}, upsert=True)
+        return data
+    except Exception as err:
+        logger.exception("Failed to save app profile")
+        return JSONResponse(status_code=500, content={"error": str(err)})
 
 
 @api.put("/app-profile/printers")
 async def update_app_profile_printers(body: AppProfilePrintersIn, _: User = Depends(ANY)):
-    data = body.model_dump(exclude_unset=True)
-    if not data or any(value is None or not value.strip() for value in data.values()):
-        raise HTTPException(422, "Pilih setidaknya satu nama printer yang valid")
-    data = {key: value.strip() for key, value in data.items()}
-    await db.app_profile.update_one({"_id": 1}, {"$set": data}, upsert=True)
-    return data
+    try:
+        data = body.model_dump(exclude_unset=True)
+        if not data or any(value is None or not value.strip() for value in data.values()):
+            raise HTTPException(422, "Pilih setidaknya satu nama printer yang valid")
+        data = {key: value.strip() for key, value in data.items()}
+        await db.app_profile.update_one({"_id": 1}, {"$set": data}, upsert=True)
+        return data
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.exception("Failed to save printer settings")
+        return JSONResponse(status_code=500, content={"error": str(err)})
 
 
 @api.get("/expenses")
@@ -973,14 +991,6 @@ for origin in ("https://babbapos.vercel.app", "http://localhost:3000", "http://1
     if origin not in configured_origins:
         configured_origins.append(origin)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=configured_origins,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 
@@ -992,3 +1002,12 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown_db_client():
     await client.close()
+
+
+app = CORSMiddleware(
+    app=app,
+    allow_credentials=True,
+    allow_origins=configured_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
