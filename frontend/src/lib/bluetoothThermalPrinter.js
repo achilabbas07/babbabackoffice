@@ -1,5 +1,5 @@
-export const RPP02_SERVICE_UUID = "18f0";
-export const RPP02_CHARACTERISTIC_UUID = "2af1";
+export const RPP02_SERVICE_UUID = "000018f0-0000-1000-8000-00805f9b34fb";
+export const RPP02_CHARACTERISTIC_UUID = "00002af1-0000-1000-8000-00805f9b34fb";
 export const RECEIPT_FOOTER = "Terima Kasih Atas Kunjungan Anda";
 const LINE_WIDTH = 32;
 const BLE_WRITE_CHUNK_SIZE = 20;
@@ -163,7 +163,11 @@ async function writeReceipt(characteristic, bytes) {
 export async function printBluetoothReceipt(
   type,
   data,
-  { device: selectedDevice, serviceUuid = RPP02_SERVICE_UUID, characteristicUuid } = {},
+  {
+    device: selectedDevice,
+    serviceUuid = RPP02_SERVICE_UUID,
+    characteristicUuid = RPP02_CHARACTERISTIC_UUID,
+  } = {},
 ) {
   const bluetooth = globalThis.navigator?.bluetooth;
   if (!bluetooth?.requestDevice) {

@@ -3,6 +3,8 @@ import {
   buildEscPosReceipt,
   printBluetoothReceipt,
   RECEIPT_FOOTER,
+  RPP02_CHARACTERISTIC_UUID,
+  RPP02_SERVICE_UUID,
 } from "./bluetoothThermalPrinter";
 
 describe("Bluetooth ESC/POS receipts", () => {
@@ -61,7 +63,10 @@ describe("Bluetooth ESC/POS receipts", () => {
         connected: true,
         connect: jest.fn(async () => ({
           getPrimaryService: jest.fn(async () => ({
-            getCharacteristics: jest.fn(async () => [characteristic]),
+            getCharacteristic: jest.fn(async (uuid) => {
+              expect(uuid).toBe(RPP02_CHARACTERISTIC_UUID);
+              return characteristic;
+            }),
           })),
         })),
         disconnect: jest.fn(),
@@ -81,8 +86,10 @@ describe("Bluetooth ESC/POS receipts", () => {
 
     expect(bluetooth.requestDevice).toHaveBeenCalledWith({
       acceptAllDevices: true,
-      optionalServices: ["18f0"],
+      optionalServices: [RPP02_SERVICE_UUID],
     });
+    const server = await device.gatt.connect.mock.results[0].value;
+    expect(server.getPrimaryService).toHaveBeenCalledWith(RPP02_SERVICE_UUID);
     expect(writes.length).toBeGreaterThan(1);
     expect(writes.every((chunk) => chunk.byteLength <= 20)).toBe(true);
     expect(device.gatt.disconnect).toHaveBeenCalledTimes(1);
