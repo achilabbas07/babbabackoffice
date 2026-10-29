@@ -212,10 +212,9 @@ function shiftAmount(value) {
   return `Rp ${new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(amount)}`;
 }
 
-function shiftRow(label, value, { compact = false } = {}) {
-  const width = compact ? 42 : LINE_WIDTH;
-  if (Array.from(`${label} ${value}`).length <= width) {
-    return [{ type: "justify", text: formatLine(label, value, width), compact }];
+function shiftRow(label, value) {
+  if (Array.from(`${label} ${value}`).length <= LINE_WIDTH) {
+    return [{ type: "justify", text: formatLine(label, value) }];
   }
   return [
     ...wrapText(label).map((text) => ({ type: "justify", text })),
@@ -250,11 +249,12 @@ export function buildBluetoothShiftReportLines(shift, { reprint = false } = {}) 
     ...shiftRow("Kas masuk", shiftAmount(shift.cashIn)),
     ...shiftRow("Kas keluar", `- ${shiftAmount(shift.cashOut)}`),
     { type: "text", text: "-".repeat(LINE_WIDTH) },
-    ...shiftRow(
-      "Saldo akhir (seharusnya)",
-      shift.expectedCash == null ? "-" : shiftAmount(shift.expectedCash),
-      { compact: true },
-    ).map((line) => ({ ...line, bold: true })),
+    { type: "justify", text: "Saldo akhir (seharusnya)", bold: true },
+    {
+      type: "justify",
+      text: (shift.expectedCash == null ? "-" : shiftAmount(shift.expectedCash)).padStart(LINE_WIDTH),
+      bold: true,
+    },
     ...shiftRow("Uang fisik", shift.countedCash == null ? "-" : shiftAmount(shift.countedCash)),
     ...shiftRow("Selisih", shift.difference == null ? "-" : shiftAmount(shift.difference)),
   ];
@@ -358,7 +358,6 @@ export async function buildEscPosReceipt(type, data) {
       continue;
     }
     command(0x1b, 0x61, line.type === "center" ? 0x01 : 0x00);
-    if (line.compact) command(0x1b, 0x4d, 0x01);
     if (line.bold) command(0x1b, 0x45, 0x01);
 
     const textLines = line.type === "center"
@@ -370,7 +369,6 @@ export async function buildEscPosReceipt(type, data) {
     }
 
     if (line.bold) command(0x1b, 0x45, 0x00);
-    if (line.compact) command(0x1b, 0x4d, 0x00);
   }
   command(0x1b, 0x61, 0x00);
   command(0x0a, 0x0a, 0x0a);

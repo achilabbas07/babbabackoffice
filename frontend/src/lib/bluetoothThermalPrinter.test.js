@@ -38,8 +38,13 @@ describe("Bluetooth ESC/POS receipts", () => {
     ]);
     expect(lines.map(({ text }) => text)).toContain("Penjualan tunai       Rp 250.000");
     expect(lines.find(({ text }) => text.includes("Total penjualan"))).toMatchObject({ bold: true });
-    expect(lines.find(({ text }) => text.includes("Saldo akhir"))).toMatchObject({ bold: true, compact: true });
-    expect(lines.find(({ text }) => text.includes("Saldo akhir")).text).toHaveLength(42);
+    const expectedBalanceLabelIndex = lines.findIndex(({ text }) => text === "Saldo akhir (seharusnya)");
+    expect(lines[expectedBalanceLabelIndex]).toMatchObject({ bold: true, type: "justify" });
+    expect(lines[expectedBalanceLabelIndex + 1]).toMatchObject({
+      text: "                      Rp 355.000",
+      bold: true,
+      type: "justify",
+    });
     expect(lines[4].text).toBe(shift.id);
     expect(reprintLines[4].text).toContain(shift.id);
     expect(reprintLines[4].text).toContain("CETAK ULANG");
