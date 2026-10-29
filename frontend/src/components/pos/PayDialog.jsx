@@ -27,12 +27,12 @@ const DiscountArea = ({ promoCode, setPromoCode, onPromo, onPoints, customerId, 
     <div className="flex gap-2">
       <input data-testid="promo-code-input" value={promoCode} onChange={(e) => setPromoCode(e.target.value.toUpperCase())} placeholder="Kode promo" disabled={hasPromo}
         className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-white px-3 font-mono text-sm uppercase outline-none focus:border-primary disabled:opacity-60" />
-      <button data-testid="apply-promo-button" disabled={!promoCode.trim() || hasPromo} onClick={onPromo}
-        className="flex h-10 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-40">
+      <button type="button" data-testid="apply-promo-button" disabled={!promoCode.trim() || hasPromo} onClick={onPromo}
+        className="flex h-10 touch-manipulation items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-40">
         <TicketPercent className="h-4 w-4" />Pakai
       </button>
     </div>
-    <button data-testid="redeem-points-button" disabled={!customerId || hasPoints} onClick={onPoints}
+    <button type="button" data-testid="redeem-points-button" disabled={!customerId || hasPoints} onClick={onPoints}
       className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-primary/50 bg-white text-sm font-semibold text-primary disabled:opacity-40">
       <Gift className="h-4 w-4" />{customerId ? "Tukar 100 Poin" : "Tukar 100 Poin (pilih pelanggan dulu)"}
     </button>
@@ -98,7 +98,7 @@ export const PayDialog = ({ open, onOpenChange, total: subtotal, onPay, busy, cu
           </div>
           <div className="grid grid-cols-4 gap-2">
             {METHODS.map(({ id, icon: Icon }) => (
-              <button key={id} data-testid={`pay-method-${id.toLowerCase()}`} onClick={() => setMethod(id)}
+              <button type="button" key={id} data-testid={`pay-method-${id.toLowerCase()}`} onClick={() => setMethod(id)}
                 className={`flex flex-col items-center gap-1.5 rounded-xl border py-3 text-xs font-medium transition-colors ${method === id ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground"}`}>
                 <Icon className="h-5 w-5" />{id}
               </button>
@@ -110,7 +110,7 @@ export const PayDialog = ({ open, onOpenChange, total: subtotal, onPay, busy, cu
                 className="h-12 w-full rounded-xl border border-border bg-transparent px-4 font-mono text-lg outline-none focus:border-primary" />
               <div className="flex flex-wrap gap-2">
                 {quick.map((v, i) => (
-                  <button key={v} data-testid={`pay-quick-${i}`} onClick={() => setCash(String(v))} className="rounded-lg border border-border px-3 py-1.5 font-mono text-xs hover:border-primary">
+                  <button type="button" key={v} data-testid={`pay-quick-${i}`} onClick={() => setCash(String(v))} className="touch-manipulation rounded-lg border border-border px-3 py-1.5 font-mono text-xs hover:border-primary">
                     {i === 0 ? "Uang pas" : rp(v)}
                   </button>
                 ))}
@@ -123,8 +123,8 @@ export const PayDialog = ({ open, onOpenChange, total: subtotal, onPay, busy, cu
               </div>
             </div>
           )}
-          <button data-testid="pay-confirm-button" disabled={!valid || busy} onClick={pay}
-            className="h-12 w-full rounded-xl bg-primary font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40">
+          <button type="button" data-testid="pay-confirm-button" disabled={!valid || busy} onClick={pay}
+            className="h-12 w-full touch-manipulation rounded-xl bg-primary font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40">
             {busy ? "Memproses..." : "Selesaikan Pembayaran"}
           </button>
         </DialogContent>

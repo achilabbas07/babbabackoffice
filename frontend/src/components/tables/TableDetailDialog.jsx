@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { PlusCircle, CreditCard, Split, Merge, MoveRight, Printer, ChefHat, Ban, Eraser, CalendarClock, Clock } from "lucide-react";
@@ -15,8 +15,9 @@ import { PrintTicketDialog } from "@/components/tables/PrintTicketDialog";
 const Action = ({ icon: Icon, label, onClick, testid, tone = "", lock }) => (
   <button
     data-testid={testid}
+    type="button"
     onClick={onClick}
-    className={`relative flex flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-2 py-3 text-xs font-semibold transition-colors hover:border-primary active:scale-[0.97] ${tone}`}
+    className={`relative flex touch-manipulation flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-2 py-3 text-xs font-semibold transition-colors hover:border-primary active:scale-[0.97] ${tone}`}
   >
     <Icon className="h-5 w-5" />
     {label}
@@ -54,6 +55,7 @@ export const TableDetailDialog = ({ table, tables, onClose, onChanged, onPaid })
   const [mode, setMode] = useState(null);
   const [pay, setPay] = useState(null);
   const [busy, setBusy] = useState(false);
+  const paymentInFlight = useRef(false);
   const isAdmin = user.role === "admin";
   const canPay = user.role !== "waiter";
   const billId = table?.orderData?.openBillId;
@@ -82,6 +84,8 @@ export const TableDetailDialog = ({ table, tables, onClose, onChanged, onPaid })
   };
 
   const doPay = async (method, cashGiven, extra = {}) => {
+    if (paymentInFlight.current) return;
+    paymentInFlight.current = true;
     setBusy(true);
     try {
       const { data } = await api.post("/transactions", {
@@ -89,12 +93,22 @@ export const TableDetailDialog = ({ table, tables, onClose, onChanged, onPaid })
         queueNumber: bill.queueNumber,
         items: pay.items.map(({ id, is_printed, productId, qty, notes, variantId }) => ({ id, is_printed, productId, qty, notes, variantId: variantId ?? null })), method, cashGiven, openBillId: bill.id, partial: pay.partial, ...extra,
       });
+      const partial = pay.partial;
       setPay(null);
       setMode(null);
-      onPaid(data, pay.partial);
+      onPaid(data, partial);
+      if (partial) {
+        try {
+          const updatedBill = await api.get(`/open-bills/${bill.id}`);
+          setBill(updatedBill.data);
+        } catch (error) {
+          toast.error(`Pembayaran berhasil, tetapi data sisa bill gagal dimuat ulang: ${errMsg(error)}`);
+        }
+      }
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
+      paymentInFlight.current = false;
       setBusy(false);
     }
   };

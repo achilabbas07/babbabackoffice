@@ -27,7 +27,9 @@ const FullscreenButton = () => {
   const [isFull, setIsFull] = useState(false);
   useEffect(() => {
     const onChange = () => setIsFull(Boolean(
-      document.fullscreenElement || document.webkitFullscreenElement,
+      document.fullscreenElement
+      || document.webkitFullscreenElement
+      || document.body.classList.contains("app-fullscreen-fallback"),
     ));
     document.addEventListener("fullscreenchange", onChange);
     document.addEventListener("webkitfullscreenchange", onChange);
@@ -38,21 +40,44 @@ const FullscreenButton = () => {
     };
   }, []);
   const toggle = async () => {
+    const fallbackActive = document.body.classList.contains("app-fullscreen-fallback");
+    if (fallbackActive) {
+      document.body.classList.remove("app-fullscreen-fallback");
+      setIsFull(false);
+      return;
+    }
+
+    const activateInPageFullscreen = () => {
+      document.body.classList.add("app-fullscreen-fallback");
+      setIsFull(true);
+    };
+
     try {
       const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
       if (fullscreenElement) {
         const exitFullscreen = document.exitFullscreen || document.webkitExitFullscreen;
-        if (!exitFullscreen) throw new Error("Browser ini tidak mendukung keluar dari layar penuh.");
+        if (!exitFullscreen) {
+          activateInPageFullscreen();
+          toast.info("Browser membatasi layar penuh; tampilan penuh di halaman diaktifkan.");
+          return;
+        }
         await exitFullscreen.call(document);
         return;
       }
 
       const root = document.documentElement;
       const requestFullscreen = root.requestFullscreen || root.webkitRequestFullscreen;
-      if (!requestFullscreen) throw new Error("Browser ini tidak mendukung mode layar penuh.");
+      if (!requestFullscreen) {
+        activateInPageFullscreen();
+        toast.info("Browser membatasi layar penuh; tampilan penuh di halaman diaktifkan.");
+        return;
+      }
       await requestFullscreen.call(root);
     } catch (error) {
-      toast.error(error?.message || "Mode layar penuh tidak dapat diaktifkan.");
+      activateInPageFullscreen();
+      toast.info(error?.message
+        ? `Layar penuh browser ditolak. Tampilan penuh di halaman diaktifkan: ${error.message}`
+        : "Layar penuh browser ditolak. Tampilan penuh di halaman diaktifkan.");
     }
   };
   const Icon = isFull ? Minimize : Maximize;
