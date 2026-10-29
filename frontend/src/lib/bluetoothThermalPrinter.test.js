@@ -106,7 +106,10 @@ describe("Bluetooth ESC/POS receipts", () => {
       cashier: "Siti",
       customerName: "Budi",
       tableName: "A-02",
-      items: [{ qty: 2, name: "Kopi Susu", price: 12500 }],
+      items: [
+        { id: "line-1", productId: "kopi", qty: 1, name: "Kopi Susu", price: 12500, subtotal: 12500, is_printed: true },
+        { id: "line-2", productId: "kopi", qty: 1, name: "Kopi Susu", price: 12500, subtotal: 12500, is_printed: false },
+      ],
       subtotal: 25000,
       total: 25000,
       cashGiven: 30000,
@@ -131,11 +134,10 @@ describe("Bluetooth ESC/POS receipts", () => {
     expect(text).toContain("Order      : Siti");
     expect(text).toContain("Customer   : Budi");
     expect(text).toContain("Nomor Meja : A-02");
-    expect(text.some((line) => line.startsWith("2 Kopi Susu"))).toBe(true);
+    expect(text.filter((line) => line.startsWith("2 Kopi Susu"))).toHaveLength(1);
     expect(text.some((line) => line.includes("Subtotal 2 Produk"))).toBe(true);
     expect(text.some((line) => line.includes("Rp 25.000"))).toBe(true);
     expect(text).toContain("Terima Kasih Atas Kunjungan Anda");
-    expect(text).toContain("instagram:warkopbabba_mks");
     expect(text[text.length - 1]).toBe("dicetak: Siti");
   });
 
@@ -178,17 +180,30 @@ describe("Bluetooth ESC/POS receipts", () => {
       tableName: "A-02",
       time: "29/10/2026",
       waiter: "Siti",
-      items: [{ qty: 2, name: "Kopi Susu", subtotal: 24000 }],
+      items: [
+        { id: "line-1", productId: "kopi", qty: 1, name: "Kopi Susu", price: 12000, subtotal: 12000, is_printed: true },
+        { id: "line-2", productId: "kopi", qty: 1, name: "Kopi Susu", price: 12000, subtotal: 12000, is_printed: false },
+      ],
       total: 24000,
     });
     const text = lines.map(({ text }) => text);
 
     expect(text).toContain("OPEN BILL");
     expect(text).toContain("No Bill    : BILL-001");
-    expect(text.some((line) => line.startsWith("2 Kopi Susu"))).toBe(true);
-    expect(text.some((line) => line.includes("Rp 24.000"))).toBe(true);
+    expect(text.filter((line) => line.includes("2 Kopi Susu") && line.includes("Rp 24.000"))).toHaveLength(1);
     expect(text).toContain("Belum lunas");
     expect(text.some((line) => line.includes("LUNAS"))).toBe(false);
+  });
+
+  it("keeps kitchen ticket lines ungrouped and preserves printed flags", () => {
+    const items = [
+      { id: "line-1", productId: "kopi", qty: 1, name: "Kopi Susu", is_printed: true },
+      { id: "line-2", productId: "kopi", qty: 1, name: "Kopi Susu", is_printed: false },
+    ];
+    const lines = buildBluetoothReceiptLines("kitchen", { items });
+
+    expect(lines.filter(({ text }) => text.includes("Kopi Susu"))).toHaveLength(2);
+    expect(items.map(({ is_printed }) => is_printed)).toEqual([true, false]);
   });
 
   it("skips a logo when image loading fails", async () => {

@@ -1,3 +1,5 @@
+import { groupOrderItemsForDisplay } from "./openBillDisplay";
+
 export const RPP02_SERVICE_UUID = "000018f0-0000-1000-8000-00805f9b34fb";
 export const RPP02_CHARACTERISTIC_UUID = "00002af1-0000-1000-8000-00805f9b34fb";
 export const RECEIPT_FOOTER = "Terima Kasih Atas Kunjungan Anda";
@@ -82,7 +84,7 @@ function itemTotal(item) {
 }
 
 function paymentLines(data) {
-  const items = data.items || data.items_json || [];
+  const items = groupOrderItemsForDisplay(data.items || data.items_json || []);
   const profile = data.profile || {};
   const paymentMethod = data.paymentMethod || data.method || "-";
   const isCash = paymentMethod === "Cash" || paymentMethod === "Tunai";
@@ -111,7 +113,7 @@ function paymentLines(data) {
     const qty = item.qty ?? 1;
     lines.push({
       type: "text",
-      text: formatLine(`${qty} ${itemName(item)}`, formatCurrency(itemTotal(item))),
+      text: formatLine(`${qty} ${item.displayName || itemName(item)}`, formatCurrency(itemTotal(item))),
     });
   }
 
@@ -176,7 +178,7 @@ function kitchenLines(data) {
 }
 
 function billLines(data) {
-  const items = data.items || data.items_json || [];
+  const items = groupOrderItemsForDisplay(data.items || data.items_json || []);
   const lines = [
     { type: "center", text: "OPEN BILL", bold: true },
     ...(data.isDuplicate === true
@@ -188,7 +190,7 @@ function billLines(data) {
     { type: "text", text: "--------------------------------" },
   ];
   for (const item of items) {
-    lines.push({ type: "text", text: formatLine(`${item.qty ?? 1} ${itemName(item)}`, formatCurrency(itemTotal(item))) });
+    lines.push({ type: "text", text: formatLine(`${item.qty ?? 1} ${item.displayName || itemName(item)}`, formatCurrency(itemTotal(item))) });
   }
   lines.push(
     { type: "text", text: "--------------------------------" },
