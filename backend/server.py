@@ -44,6 +44,11 @@ class LoginIn(BaseModel):
     pin: str = Field(pattern=r"^\d{4,6}$")
 
 
+class NameLoginIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    pin: str = Field(pattern=r"^\d{4,6}$")
+
+
 class UserIn(BaseModel):
     name: str = Field(min_length=1)
     role: Literal["admin", "kasir", "waiter"]
@@ -240,7 +245,13 @@ def client_ident(request: Request) -> str:
     return (request.headers.get("x-forwarded-for") or (request.client.host if request.client else "")).split(",")[0].strip()
 
 
-async def check_pin(request: Request, pin: str, role: Optional[str] = None, user_id: Optional[str] = None) -> dict:
+async def check_pin(
+    request: Request,
+    pin: str,
+    role: Optional[str] = None,
+    user_id: Optional[str] = None,
+    name: Optional[str] = None,
+) -> dict:
     ident = client_ident(request)
     now = datetime.now(timezone.utc)
     att = await db.login_attempts.find_one({"identifier": ident}) or {}
@@ -250,6 +261,8 @@ async def check_pin(request: Request, pin: str, role: Optional[str] = None, user
     query = {"role": role} if role else {}
     if user_id:
         query["_id"] = user_id
+    if name:
+        query["name"] = name
     async for doc in db.users.find(query):
         if verify_pin(pin, doc["pin"]):
             await db.login_attempts.delete_one({"identifier": ident})
@@ -257,7 +270,11 @@ async def check_pin(request: Request, pin: str, role: Optional[str] = None, user
     count = 1 if locked else att.get("count", 0) + 1
     update = {"count": count, "locked_until": (now + timedelta(minutes=15)).isoformat() if count >= 5 else None}
     await db.login_attempts.update_one({"identifier": ident}, {"$set": update}, upsert=True)
-    raise HTTPException(401, "PIN admin salah" if role else "PIN salah")
+    if name:
+        detail = "Nama atau PIN salah"
+    else:
+        detail = "PIN admin salah" if role else "PIN salah"
+    raise HTTPException(401, detail)
 
 
 async def pin_in_use(pin: str, exclude: Optional[str] = None) -> bool:
@@ -277,6 +294,15 @@ async def root():
 async def login_users():
     docs = await db.users.find({}, {"name": 1, "role": 1}).sort([("role", 1), ("name", 1)]).to_list(None)
     return [{"id": d["_id"], "name": d["name"], "role": d["role"]} for d in docs]
+
+
+@api.post("/login")
+async def login_by_name(body: NameLoginIn, request: Request):
+    user = User.from_mongo(await check_pin(request, body.pin, name=body.name))
+    return {
+        "token": create_token(user.id),
+        "user": {"id": user.id, "name": user.name, "role": user.role},
+    }
 
 
 @api.post("/auth/login")

@@ -75,7 +75,7 @@ Utilitas `src/lib/bluetoothThermalPrinter.js` mengirim struk kitchen/payment dal
 
 Web Bluetooth memerlukan browser yang mendukungnya (umumnya Chrome/Edge) dan halaman HTTPS atau localhost. Simpan order meminta izin/pilihan printer dari gesture pengguna bila belum dipilih; setelah save berhasil, tiket dapur otomatis mencetak hanya item baru yang belum `is_printed`. Dialog dapur juga memisahkan cetak item baru dari tombol **Cetak Ulang Item Tercetak**; penanda DUPLIKAT hanya dipakai untuk cetak ulang manual. Perangkat tersimpan di memori halaman agar cetak berikutnya tidak meminta pairing lagi; bila koneksi putus, modul mencoba menyambungkan ulang perangkat yang sama. Default layanan RPP02 adalah UUID `000018f0-0000-1000-8000-00805f9b34fb`, dengan karakteristik tulis `00002af1-0000-1000-8000-00805f9b34fb`; jika printer memakai UUID lain, berikan `serviceUuid` dan `characteristicUuid` ke komponen. Header waktu struk memakai waktu awal pesanan (`orderTime`/`createdAt`); bagian terbayar memakai waktu pembayaran (`paidAt`). Nomor urut dicetak dari `queueNumber`, metode pembayaran mengikuti transaksi, dan baris kembalian hanya dicetak untuk Cash/Tunai. Data `kitchen` menerima detail pesanan dan `items`/`items_json`; `payment` menerima detail transaksi, `items`/`items_json`, `total`, dan `profile` (`nama_usaha`, `alamat`, `kota`, `telepon`, `logo_url`). Logo dimuat melalui canvas; server logo lintas-origin harus mengizinkan CORS agar bisa dicetak, jika tidak struk tetap dicetak tanpa logo. `bill` mencetak open bill yang belum lunas melalui Bluetooth.
 
-## Login Supabase Auth
+## Login POS nama dan PIN
 
 Frontend ini memakai Create React App (`react-scripts` melalui CRACO), jadi nama variabel browser harus diawali `REACT_APP_` — bukan `NEXT_PUBLIC_`. File `.env` harus berada di folder `frontend`, sejajar dengan `package.json`. Salin template dari folder `frontend`:
 
@@ -91,7 +91,11 @@ REACT_APP_SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co
 REACT_APP_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
 ```
 
-`REACT_APP_BACKEND_URL` adalah origin backend tanpa akhiran `/api` (contoh lokal di atas memakai port yang digunakan tes backend proyek ini). Pastikan backend benar-benar berjalan pada alamat tersebut. Jika backend berada di port/host lain, gunakan alamat yang sesuai. Simpan `.env` di `frontend/.env`, bukan di root repository. Setelah mengubahnya, hentikan dan jalankan ulang dev server (`npm start`); CRA hanya membaca environment ketika proses dimulai. URL Supabase yang kosong atau key placeholder akan ditampilkan sebagai kesalahan konfigurasi, dan frontend tidak lagi mengirim request ke URL `undefined/api`.
+`REACT_APP_BACKEND_URL` adalah origin backend tanpa akhiran `/api` (contoh lokal di atas memakai port yang digunakan tes backend proyek ini). Pastikan backend benar-benar berjalan pada alamat tersebut. Jika backend berada di port/host lain, gunakan alamat yang sesuai. Simpan `.env` di `frontend/.env`, bukan di root repository. Setelah mengubahnya, hentikan dan jalankan ulang dev server (`npm start`); CRA hanya membaca environment ketika proses dimulai.
+
+Login POS mengirim nama dan PIN ke `POST /api/login`. Nama harus sama dengan nama pengguna di tabel `users`, dan PIN POS terdiri dari 4-6 digit. Backend memverifikasi PIN terhadap hash bcrypt dan mengembalikan token serta `id`, `name`, dan `role` pengguna. Token disimpan di `localStorage` dan dikirim untuk otorisasi request POS; pemeriksaan akses tetap dilakukan backend.
+
+Variabel Supabase di atas masih digunakan fitur POS lain yang memanggil RPC Supabase, tetapi tidak diperlukan untuk login. Nilai anon/publishable key memang digunakan di browser; keamanan database harus ditegakkan dengan RLS. Jangan pernah gunakan `service_role` key di frontend.
 
 Contoh client yang dipakai proyek:
 
@@ -104,14 +108,4 @@ const supabase = createClient(
 );
 ```
 
-Nilai anon/publishable key memang digunakan di browser; keamanan database harus ditegakkan dengan RLS. Jangan pernah gunakan `service_role` key di frontend.
-
-Layar login meminta email/password Supabase terlebih dahulu. Error `400` pada `grant_type=password` biasanya berarti kredensial tidak cocok atau email belum dikonfirmasi; periksa isi respons Auth di Developer Tools, karena error itu sendiri tidak membuktikan bahwa URL/key bernilai `undefined`. Setelah autentikasi berhasil, sesi disimpan oleh SDK dan UI menampilkan akun POS yang role-nya cocok dengan claim `app_metadata.pos_role` (`owner` -> `admin`, `kasir` -> `kasir`, `pelayan` -> `waiter`). PIN POS tetap diminta sebagai langkah lanjutan melalui backend POS.
-
-### Pemulihan password dan akun testing
-
-**Memulai reset dari Dashboard:** buka Supabase Dashboard -> pilih project -> Authentication -> Users, cari user berdasarkan email, lalu gunakan tindakan **Send password recovery** (nama menu bisa sedikit berbeda). User harus membuka email pemulihan dan menetapkan password baru; dashboard tidak dapat menampilkan password lama. Untuk tautan localhost, tambahkan URL lokal aplikasi di Authentication -> URL Configuration -> Redirect URLs jika alur recovery memintanya. Pastikan SMTP/email provider project berfungsi.
-
-**Membuat user testing tanpa verifikasi email:** di Authentication -> Users pilih **Add user** / **Create new user**, isi email dan password lokal, lalu aktifkan **Auto Confirm User** (atau opsi konfirmasi email yang setara) sebelum membuat user. Ini hanya melewati verifikasi email; user baru tetap perlu claim `app_metadata.pos_role` yang cocok agar bisa melewati login aplikasi. Untuk membuat akun dengan role sekaligus tanpa mengirim email, gunakan skrip admin tepercaya [`admin-scripts/provision_users.js`](../admin-scripts/provision_users.js), yang memanggil Admin API dengan `email_confirm: true`. `SUPABASE_SERVICE_ROLE_KEY` hanya boleh berada di `.env` lokal skrip admin/server, jangan pernah di frontend atau repository.
-
-Akun Auth juga harus memiliki user POS yang cocok pada backend (role `owner` -> `admin`, `kasir` -> `kasir`, `pelayan` -> `waiter`) dan PIN POS. Skrip provisioning Supabase hanya membuat akun Auth; skrip tersebut tidak membuat record pengguna POS. Untuk deployment, atur ketiga variabel `REACT_APP_...` pada environment hosting dan build ulang frontend.
+Nama, peran, dan PIN pengguna POS dikelola melalui menu **Pengguna & PIN** oleh admin. Password Supabase Auth dan akun yang dibuat lewat [`admin-scripts/provision_users.js`](../admin-scripts/provision_users.js) tidak digunakan untuk login POS.

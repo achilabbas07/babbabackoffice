@@ -27,5 +27,6 @@ node .\provision_users.js kasir_utama@warkopbabba.com kasir
 Role yang diizinkan adalah `owner`, `kasir`, dan `pelayan`. Skrip mengonfirmasi
 email untuk akun yang diprovisi administrator dan mengatur
 `app_metadata.pos_role`. Gunakan password kuat yang berbeda untuk setiap staf;
-jangan gunakan PIN POS yang pendek sebagai password Supabase. Pembuatan akun
-ini saja belum menghubungkan akun Supabase baru dengan alur login POS yang ada.
+jangan gunakan PIN POS sebagai password Supabase. Akun Auth yang dibuat di sini
+tidak digunakan untuk login POS; login POS memakai nama dan PIN pengguna pada
+tabel `users`.

@@ -20,7 +20,7 @@ api.interceptors.response.use(
   (r) => r,
   (err) => {
     const url = err.config?.url || "";
-    const isPinCheck = url.includes("/auth/login") || url.includes("/auth/verify-admin") || url.endsWith("/void");
+    const isPinCheck = url.includes("/auth/login") || url.endsWith("/login") || url.includes("/auth/verify-admin") || url.endsWith("/void");
     if (err.response?.status === 401 && !isPinCheck) {
       localStorage.removeItem("pos_token");
       window.dispatchEvent(new Event("pos-logout"));
