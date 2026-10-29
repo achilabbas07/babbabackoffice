@@ -58,7 +58,6 @@ const FullscreenButton = () => {
         const exitFullscreen = document.exitFullscreen || document.webkitExitFullscreen;
         if (!exitFullscreen) {
           activateInPageFullscreen();
-          toast.info("Browser membatasi layar penuh; tampilan penuh di halaman diaktifkan.");
           return;
         }
         await exitFullscreen.call(document);
@@ -69,14 +68,12 @@ const FullscreenButton = () => {
       const requestFullscreen = root.requestFullscreen || root.webkitRequestFullscreen;
       if (!requestFullscreen) {
         activateInPageFullscreen();
-        toast.info("Browser membatasi layar penuh; tampilan penuh di halaman diaktifkan.");
         return;
       }
       await requestFullscreen.call(root);
     } catch (error) {
       activateInPageFullscreen();
       console.warn("Browser fullscreen was denied; using the in-page fallback.", error);
-      toast.info("Tampilan aplikasi diperluas. Bilah browser tetap terlihat karena izin layar penuh tidak diberikan.");
     }
   };
   const Icon = isFull ? Minimize : Maximize;
