@@ -1,9 +1,10 @@
 import { Printer } from "lucide-react";
 import { useState } from "react";
 import { flushSync } from "react-dom";
+import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { fmtDate, itemName, rp } from "@/lib/api";
-import { printDocument } from "@/lib/print";
+import { printBluetoothReceipt } from "@/lib/bluetoothThermalPrinter";
 import { useProfile } from "@/context/ProfileContext";
 import { BrandLogo } from "@/components/BrandLogo";
 import { buildPaidReceiptLines, incrementPrintCount, printCountKey, readPrintCount, wrapPrintText } from "@/lib/thermalPrint";
@@ -50,6 +51,7 @@ const ThermalBusinessHeader = ({ testid }) => {
 
 export const ReceiptDialog = ({ trx, onClose }) => {
   const [, setPrintRevision] = useState(0);
+  const [printing, setPrinting] = useState(false);
   const printKey = printCountKey("receipt", trx?.id);
   const printCount = readPrintCount(printKey);
   const lines = trx ? buildPaidReceiptLines({
@@ -60,10 +62,25 @@ export const ReceiptDialog = ({ trx, onClose }) => {
     itemName,
   }) : [];
 
-  const handlePrint = () => {
-    const count = incrementPrintCount(printKey);
-    flushSync(() => setPrintRevision(count));
-    printDocument("struk pembayaran");
+  const handlePrint = async () => {
+    setPrinting(true);
+    try {
+      await printBluetoothReceipt("payment", {
+        id: trx.id,
+        cashier: trx.userName || trx.userId || "-",
+        items: (trx.items_json || []).map((item) => ({
+          ...item,
+          name: itemName(item),
+        })),
+        total: trx.total,
+      });
+      const count = incrementPrintCount(printKey);
+      flushSync(() => setPrintRevision(count));
+    } catch (error) {
+      toast.error(error?.message || "Struk gagal dicetak melalui Bluetooth.");
+    } finally {
+      setPrinting(false);
+    }
   };
 
   return (
@@ -77,9 +94,10 @@ export const ReceiptDialog = ({ trx, onClose }) => {
             <button
               data-testid="receipt-print-button"
               onClick={handlePrint}
+              disabled={printing}
               className="no-print flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border font-medium hover:border-primary"
             >
-              <Printer className="h-4 w-4" /> Cetak Struk
+              <Printer className="h-4 w-4" /> {printing ? "Mencetak..." : "Cetak Struk"}
             </button>
           </div>
         )}

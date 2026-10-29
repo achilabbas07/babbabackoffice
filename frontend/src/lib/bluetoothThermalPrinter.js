@@ -46,7 +46,7 @@ function wrapText(value, width = LINE_WIDTH) {
 }
 
 function itemName(item) {
-  return item.name || item.menuName || item.productName || "Menu";
+  return item.name || item.variantName || item.menuName || item.productName || "Menu";
 }
 
 function formatCurrency(value) {

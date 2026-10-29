@@ -1,9 +1,11 @@
 import { Printer } from "lucide-react";
 import { useState } from "react";
 import { flushSync } from "react-dom";
+import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { fmtDate, itemName, rp } from "@/lib/api";
 import { printDocument } from "@/lib/print";
+import { printBluetoothReceipt } from "@/lib/bluetoothThermalPrinter";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useProfile } from "@/context/ProfileContext";
 import {
@@ -19,6 +21,7 @@ export const PrintTicketDialog = ({ bill, tableName, mode, onClose }) => {
   const kitchen = mode === "kitchen";
   const { profile } = useProfile();
   const [, setPrintRevision] = useState(0);
+  const [printing, setPrinting] = useState(false);
   const printKey = printCountKey(kitchen ? "kitchen" : "bill", bill?.id);
   const printCount = readPrintCount(printKey);
   const dateText = fmtDate(bill?.timestamp || new Date().toISOString());
@@ -31,10 +34,29 @@ export const PrintTicketDialog = ({ bill, tableName, mode, onClose }) => {
     ...(profile.phone ? wrapPrintText(`Telp. ${profile.phone}`) : []),
   ];
 
-  const handlePrint = () => {
-    const count = incrementPrintCount(printKey);
-    flushSync(() => setPrintRevision(count));
-    printDocument(kitchen ? "order dapur" : "bill");
+  const handlePrint = async () => {
+    setPrinting(true);
+    try {
+      if (kitchen) {
+        await printBluetoothReceipt("kitchen", {
+          tableName: tableName || bill.type || "-",
+          time: dateText,
+          items: (bill.items_json || []).map((item) => ({
+            ...item,
+            name: itemName(item),
+            note: item.notes || item.note,
+          })),
+        });
+      } else {
+        printDocument("bill");
+      }
+      const count = incrementPrintCount(printKey);
+      flushSync(() => setPrintRevision(count));
+    } catch (error) {
+      toast.error(error?.message || "Struk gagal dicetak melalui Bluetooth.");
+    } finally {
+      setPrinting(false);
+    }
   };
 
   return (
@@ -59,9 +81,10 @@ export const PrintTicketDialog = ({ bill, tableName, mode, onClose }) => {
             <button
               data-testid={`print-${mode}-button`}
               onClick={handlePrint}
+              disabled={printing}
               className="no-print flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary font-medium text-primary-foreground"
             >
-              <Printer className="h-4 w-4" /> Cetak
+              <Printer className="h-4 w-4" /> {printing ? "Mencetak..." : "Cetak"}
             </button>
           </div>
         )}
