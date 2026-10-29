@@ -31,8 +31,8 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  const login = async (name, pin) => {
-    const { data } = await api.post("/login", { name, pin });
+  const login = async (userId, pin) => {
+    const { data } = await api.post("/auth/login", { userId, pin });
     if (!data.token || !data.user?.id || !data.user?.role || !data.user?.name) {
       throw new Error("Respons login tidak valid.");
     }
