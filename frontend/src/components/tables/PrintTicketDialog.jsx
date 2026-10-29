@@ -1,5 +1,5 @@
 import { Printer } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -7,6 +7,7 @@ import { fmtDate, itemName, rp } from "@/lib/api";
 import { printBluetoothReceipt } from "@/lib/bluetoothThermalPrinter";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useProfile } from "@/context/ProfileContext";
+import { supabase } from "@/supabaseClient";
 import {
   buildKitchenTicketLines,
   buildOpenBillLines,
@@ -21,6 +22,7 @@ export const PrintTicketDialog = ({ bill, tableName, mode, onClose }) => {
   const { profile } = useProfile();
   const [, setPrintRevision] = useState(0);
   const [printing, setPrinting] = useState(false);
+  const [printedItemIds, setPrintedItemIds] = useState(() => new Set());
   const printKey = printCountKey(kitchen ? "kitchen" : "bill", bill?.id);
   const printCount = readPrintCount(printKey);
   const dateText = fmtDate(bill?.timestamp || new Date().toISOString());
@@ -33,25 +35,55 @@ export const PrintTicketDialog = ({ bill, tableName, mode, onClose }) => {
     ...(profile.phone ? wrapPrintText(`Telp. ${profile.phone}`) : []),
   ];
 
+  useEffect(() => {
+    setPrintedItemIds(new Set());
+  }, [bill?.id]);
+
   const handlePrint = async () => {
     setPrinting(true);
     try {
       if (kitchen) {
+        const unprintedItems = (bill.items_json || []).filter(
+          (item) => !item.is_printed && !printedItemIds.has(item.id),
+        );
+        if (!unprintedItems.length) {
+          toast.info("Semua item bill ini sudah pernah dicetak ke dapur.");
+          return;
+        }
+        const itemIds = unprintedItems.map((item) => item.id);
+        if (itemIds.some((id) => typeof id !== "string" || !id)) {
+          throw new Error("ID item belum tersedia. Simpan ulang bill sebelum mencetak pesanan dapur.");
+        }
+        if (!supabase) {
+          throw new Error("Supabase belum dikonfigurasi untuk menyimpan status cetak dapur.");
+        }
         await printBluetoothReceipt("kitchen", {
           id: bill.id,
+          isDuplicate: printCount > 0 || Number(bill.print_count) > 0,
           tableName: tableName || bill.type || "-",
           time: dateText,
           queueNumber: bill.queueNumber,
           waiter: bill.waiterName || bill.userName || "-",
-          items: (bill.items_json || []).map((item) => ({
+          items: unprintedItems.map((item) => ({
             ...item,
             name: itemName(item),
             note: item.notes || item.note,
           })),
         });
+        setPrintedItemIds((printedIds) => new Set([...printedIds, ...itemIds]));
+        const count = incrementPrintCount(printKey);
+        flushSync(() => setPrintRevision(count));
+        const { error } = await supabase.rpc("mark_json_items_as_printed", {
+          p_bill_id: bill.id,
+          p_item_ids: itemIds,
+        });
+        if (error) {
+          throw new Error(`Pesanan sudah tercetak, tetapi status cetak gagal disimpan: ${error.message}`);
+        }
       } else {
         await printBluetoothReceipt("bill", {
           id: bill.id,
+          isDuplicate: printCount > 0 || Number(bill.print_count) > 0,
           tableName: tableName || bill.type || "-",
           time: dateText,
           waiter: bill.waiterName || bill.userName || "-",
@@ -61,9 +93,9 @@ export const PrintTicketDialog = ({ bill, tableName, mode, onClose }) => {
           })),
           total: bill.total,
         });
+        const count = incrementPrintCount(printKey);
+        flushSync(() => setPrintRevision(count));
       }
-      const count = incrementPrintCount(printKey);
-      flushSync(() => setPrintRevision(count));
     } catch (error) {
       toast.error(error?.message || "Struk gagal dicetak melalui Bluetooth.");
     } finally {

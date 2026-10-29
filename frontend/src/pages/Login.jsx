@@ -1,13 +1,67 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { Delete, Lock, ArrowLeft, UserRound } from "lucide-react";
+import { Delete, Lock, ArrowLeft, UserRound, LogOut } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useProfile } from "@/context/ProfileContext";
 import { BrandLogo } from "@/components/BrandLogo";
 import { api, errMsg, ROLE_LABEL } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "clear", "0", "back"];
 const ROLE_TONE = { admin: "bg-blue-100 text-blue-700", kasir: "bg-emerald-100 text-emerald-700", waiter: "bg-amber-100 text-amber-700" };
+
+const SupabaseLoginForm = ({ onSubmit }) => {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await onSubmit(email.trim(), password);
+    } catch (loginError) {
+      setError(loginError.message || "Gagal masuk ke Supabase.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="space-y-3" data-testid="supabase-login-form">
+      <label className="block space-y-1 text-sm font-medium">
+        Email
+        <input
+          data-testid="supabase-email-input"
+          type="email"
+          autoComplete="username"
+          required
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          className="h-11 w-full rounded-xl border border-border bg-card px-3 outline-none focus:border-primary"
+        />
+      </label>
+      <label className="block space-y-1 text-sm font-medium">
+        Password Supabase
+        <input
+          data-testid="supabase-password-input"
+          type="password"
+          autoComplete="current-password"
+          required
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          className="h-11 w-full rounded-xl border border-border bg-card px-3 outline-none focus:border-primary"
+        />
+      </label>
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      <Button data-testid="supabase-login-submit" type="submit" className="h-11 w-full" disabled={busy}>
+        {busy ? "Memverifikasi..." : "Lanjut ke PIN POS"}
+      </Button>
+    </form>
+  );
+};
 
 const UserPicker = ({ users, onPick }) => (
   <div data-testid="login-user-list" className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -82,7 +136,16 @@ const PinPad = ({ selected, onBack, onSubmit }) => {
 };
 
 export default function Login() {
-  const { user, login } = useAuth();
+  const {
+    user,
+    login,
+    logout,
+    signInSupabase,
+    supabaseSession,
+    supabaseRole,
+    supabaseReady,
+    supabaseConfigError,
+  } = useAuth();
   const brand = useProfile();
   const [users, setUsers] = useState([]);
   const [usersError, setUsersError] = useState("");
@@ -90,10 +153,25 @@ export default function Login() {
   const [selected, setSelected] = useState(null);
 
   useEffect(() => {
+    if (!supabaseReady) return undefined;
+    if (supabaseConfigError) {
+      setUsersError(supabaseConfigError);
+      setUsersLoading(false);
+      return undefined;
+    }
+    if (!supabaseSession) {
+      setUsers([]);
+      setSelected(null);
+      setUsersError("");
+      setUsersLoading(false);
+      return undefined;
+    }
+    setUsersLoading(true);
+    setSelected(null);
     if (!process.env.REACT_APP_BACKEND_URL?.trim()) {
       setUsersError("Backend belum dikonfigurasi. Atur REACT_APP_BACKEND_URL di Vercel, lalu deploy ulang.");
       setUsersLoading(false);
-      return;
+      return undefined;
     }
 
     api.get("/auth/users")
@@ -101,17 +179,29 @@ export default function Login() {
         if (!Array.isArray(data)) {
           throw new Error("Respons backend tidak valid. Endpoint /api/auth/users harus mengembalikan daftar pengguna.");
         }
-        setUsers(data);
+        const matchingUsers = data.filter((candidate) => candidate.role === supabaseRole);
+        setUsers(matchingUsers);
+        setUsersError(matchingUsers.length
+          ? ""
+          : `Tidak ada user POS dengan role ${ROLE_LABEL[supabaseRole] || "yang sesuai"} untuk akun Supabase ini.`);
       })
       .catch((err) => {
         setUsers([]);
         setUsersError(errMsg(err));
       })
       .finally(() => setUsersLoading(false));
-  }, []);
+    return undefined;
+  }, [supabaseReady, supabaseConfigError, supabaseSession, supabaseRole]);
 
   if (user) return <Navigate to="/pos" replace />;
   const { profile, appName } = brand;
+  const handleSupabaseLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      setUsersError(error.message || "Gagal mengakhiri sesi Supabase.");
+    }
+  };
 
   return (
     <div className="grid min-h-screen lg:grid-cols-[1fr_1.1fr]">
@@ -130,15 +220,45 @@ export default function Login() {
             <BrandLogo url={profile.logo_url} className="h-11 w-11" testid="login-brand-logo" />
             <div className="min-w-0">
               <p data-testid="login-brand-name" className="truncate text-xl font-bold">{appName}</p>
-              <p className="text-sm text-muted-foreground">{selected ? "Masukkan PIN Anda" : "Pilih nama pengguna"}</p>
+              <p className="text-sm text-muted-foreground">
+                {!supabaseSession ? "Masuk dengan akun Supabase" : selected ? "Masukkan PIN POS Anda" : "Pilih user POS"}
+              </p>
             </div>
           </div>
-          {selected ? <PinPad selected={selected} onBack={() => setSelected(null)} onSubmit={(pin) => login(selected.id, pin)} /> : usersLoading ? (
+          {!supabaseReady ? (
+            <p role="status" className="text-center text-sm text-muted-foreground">Memeriksa sesi...</p>
+          ) : supabaseConfigError ? (
+            <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{supabaseConfigError}</p>
+          ) : !supabaseSession ? (
+            <SupabaseLoginForm onSubmit={signInSupabase} />
+          ) : !supabaseRole ? (
+            <div className="space-y-3">
+              <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+                Akun Supabase tidak memiliki `app_metadata.pos_role` yang valid.
+              </p>
+              <Button type="button" variant="outline" className="w-full" onClick={handleSupabaseLogout}>
+                <LogOut className="h-4 w-4" /> Keluar dari Supabase
+              </Button>
+            </div>
+          ) : selected ? <PinPad selected={selected} onBack={() => setSelected(null)} onSubmit={(pin) => login(selected.id, pin)} /> : usersLoading ? (
             <p role="status" className="text-center text-sm text-muted-foreground">Memuat daftar pengguna...</p>
           ) : usersError ? (
-            <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{usersError}</p>
+            <div className="space-y-3">
+              <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{usersError}</p>
+              <Button type="button" variant="outline" className="w-full" onClick={handleSupabaseLogout}>
+                <LogOut className="h-4 w-4" /> Keluar dari Supabase
+              </Button>
+            </div>
           ) : users.length ? (
-            <UserPicker users={users} onPick={setSelected} />
+            <div className="space-y-4">
+              <p className="text-center text-xs text-muted-foreground">
+                Sesi Supabase aktif · Role {ROLE_LABEL[supabaseRole]}
+              </p>
+              <UserPicker users={users} onPick={setSelected} />
+              <Button type="button" variant="outline" className="w-full" onClick={handleSupabaseLogout}>
+                <LogOut className="h-4 w-4" /> Ganti akun Supabase
+              </Button>
+            </div>
           ) : (
             <p role="status" className="text-center text-sm text-muted-foreground">Belum ada pengguna. Tambahkan pengguna melalui backend.</p>
           )}

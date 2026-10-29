@@ -68,6 +68,7 @@ export const ReceiptDialog = ({ trx, onClose }) => {
     try {
       await printBluetoothReceipt("payment", {
         id: trx.id,
+        isDuplicate: printCount > 0 || Number(trx.print_count) > 0,
         time: fmtDate(trx.date),
         queueNumber: trx.queueNumber,
         cashier: trx.userName || trx.userId || "-",

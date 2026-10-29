@@ -3,6 +3,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { LogOut, Maximize, Minimize } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useProfile } from "@/context/ProfileContext";
+import { toast } from "sonner";
 import { BrandLogo } from "@/components/BrandLogo";
 import { NAV } from "@/lib/nav";
 import { ROLE_LABEL } from "@/lib/api";
@@ -76,6 +77,13 @@ const NavItem = ({ to, label, icon: Icon, prefix }) => (
 export default function Layout() {
   const { user, logout } = useAuth();
   const items = NAV.filter((n) => n.roles.includes(user.role));
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      toast.error(error.message || "Gagal mengakhiri sesi.");
+    }
+  };
   return (
     <div className="min-h-screen md:flex">
       <aside className="sticky top-0 hidden h-screen w-[88px] shrink-0 flex-col border-r border-border bg-card md:flex 2xl:w-64">
@@ -98,7 +106,7 @@ export default function Layout() {
               </div>
               <button
                 data-testid="logout-button"
-                onClick={logout}
+                onClick={handleLogout}
                 className="grid h-10 w-10 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
                 title="Keluar"
               >

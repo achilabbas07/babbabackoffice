@@ -30,6 +30,26 @@ describe("Bluetooth ESC/POS receipts", () => {
     expect(lines[lines.length - 2]).toEqual({ type: "center", text: "29/10/2026 10:00" });
   });
 
+  it("uses the addon header and places duplicate markers below receipt headers", () => {
+    const addon = buildBluetoothReceiptLines("kitchen", {
+      isAddOn: true,
+      isDuplicate: true,
+      items: [],
+    });
+    expect(addon[0]).toMatchObject({ type: "center", text: "TAMBAHAN ORDER" });
+    expect(addon[1]).toMatchObject({ type: "center", text: "*** DUPLIKAT ***", bold: true });
+
+    const payment = buildBluetoothReceiptLines("payment", {
+      isDuplicate: true,
+      profile: { nama_usaha: "Warkop Babba" },
+      items: [],
+    });
+    expect(payment[1]).toMatchObject({ type: "center", text: "*** DUPLIKAT ***", bold: true });
+
+    const bill = buildBluetoothReceiptLines("bill", { isDuplicate: true, items: [] });
+    expect(bill[1]).toMatchObject({ type: "center", text: "*** DUPLIKAT ***", bold: true });
+  });
+
   it("builds payment profile, item, totals, and footer rows", () => {
     const lines = buildBluetoothReceiptLines("payment", {
       id: "TRX-001",
@@ -77,7 +97,9 @@ describe("Bluetooth ESC/POS receipts", () => {
   it("includes alignment, initialization, and auto-cut ESC/POS commands", async () => {
     const bytes = await buildEscPosReceipt("kitchen", { items: [] });
 
-    expect(Array.from(bytes.slice(0, 5))).toEqual([0x1b, 0x40, 0x1b, 0x61, 0x01]);
+    expect(Array.from(bytes.slice(0, 9))).toEqual([
+      0x1b, 0x40, 0x1d, 0x4c, 0x00, 0x00, 0x1b, 0x61, 0x01,
+    ]);
     expect(Array.from(bytes.slice(-6))).toEqual([0x0a, 0x0a, 0x0a, 0x1d, 0x56, 0x00]);
   });
 

@@ -85,10 +85,15 @@ function paymentLines(data) {
   const items = data.items || data.items_json || [];
   const profile = data.profile || {};
   const lines = [
-    { type: "center", text: profile.nama_usaha || "" , bold: true },
-    ...wordWrapCenter(profile.alamat || "").map((text) => ({ type: "center", text })),
-    ...wordWrapCenter(profile.kota || "").map((text) => ({ type: "center", text })),
-    ...wordWrapCenter(profile.telepon || "").map((text) => ({ type: "center", text })),
+    ...(profile.nama_usaha
+      ? [{ type: "center", text: profile.nama_usaha, bold: true }]
+      : []),
+    ...[profile.alamat, profile.kota, profile.telepon]
+      .filter(Boolean)
+      .flatMap((value) => wordWrapCenter(value).map((text) => ({ type: "center", text }))),
+    ...(data.isDuplicate === true
+      ? [{ type: "center", text: "*** DUPLIKAT ***", bold: true }]
+      : []),
     { type: "text", text: "================================" },
     { type: "text", text: fieldLine("No Nota", data.id || data.transactionNo || data.transactionId) },
     { type: "text", text: fieldLine("Waktu", data.time || data.dateTime || data.date) },
@@ -136,7 +141,10 @@ function paymentLines(data) {
 function kitchenLines(data) {
   const items = data.items || data.items_json || [];
   const lines = [
-    { type: "center", text: "DAPUR" },
+    { type: "center", text: data.isAddOn === true ? "TAMBAHAN ORDER" : "DAPUR" },
+    ...(data.isDuplicate === true
+      ? [{ type: "center", text: "*** DUPLIKAT ***", bold: true }]
+      : []),
     { type: "blank", text: "" },
     { type: "text", text: fieldLine("No Nota", data.id || data.transactionNo) },
     { type: "text", text: fieldLine("Waktu", data.time || data.dateTime || data.date) },
@@ -168,6 +176,9 @@ function billLines(data) {
   const items = data.items || data.items_json || [];
   const lines = [
     { type: "center", text: "OPEN BILL", bold: true },
+    ...(data.isDuplicate === true
+      ? [{ type: "center", text: "*** DUPLIKAT ***", bold: true }]
+      : []),
     { type: "text", text: fieldLine("No Bill", data.id) },
     { type: "text", text: fieldLine("Waktu", data.time || data.dateTime || data.date) },
     { type: "text", text: fieldLine("Nomor Meja", data.tableName || data.table) },
@@ -219,7 +230,8 @@ export async function convertImageToESCPOS(imageUrl) {
     const sourceHeight = image.naturalHeight || image.height;
     if (!sourceWidth || !sourceHeight) throw new Error("Dimensi logo tidak valid.");
 
-    const width = Math.min(384, sourceWidth);
+    const MAX_WIDTH = 200;
+    const width = Math.min(MAX_WIDTH, sourceWidth);
     const height = Math.max(1, Math.round((sourceHeight * width) / sourceWidth));
     const canvas = document.createElement("canvas");
     canvas.width = width;
@@ -265,6 +277,7 @@ export async function buildEscPosReceipt(type, data) {
   const writeText = (text) => appendBytes(bytes, encodeText(text));
 
   command(0x1b, 0x40); // Initialize printer.
+  command(0x1d, 0x4c, 0x00, 0x00);
   if (type === "payment" && data.profile?.logo_url) {
     const logoBytes = await convertImageToESCPOS(data.profile.logo_url);
     if (logoBytes.length) command(0x1b, 0x61, 0x01);

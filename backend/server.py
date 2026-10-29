@@ -21,6 +21,7 @@ import asyncpg
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import List, Literal, Optional
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -118,6 +119,8 @@ class InventoryIn(BaseModel):
 
 
 class OrderItemIn(BaseModel):
+    id: Optional[str] = None
+    is_printed: bool = False
     productId: str
     qty: int = Field(gt=0)
     notes: str = ""
@@ -125,6 +128,7 @@ class OrderItemIn(BaseModel):
 
 
 class OpenBillIn(BaseModel):
+    queueNumber: Optional[int] = None
     type: ORDER_TYPES
     tableId: Optional[str] = None
     customerId: Optional[str] = None
@@ -192,7 +196,8 @@ async def build_items(items: List[OrderItemIn], order_type: str):
             raise HTTPException(400, f"Varian #{i.variantId} tidak cocok untuk {p.name}")
         extra = float(v.get("additional_price") or 0) if v else 0
         price = unit_price(p, order_type) + extra
-        out.append({"productId": p.id, "productName": p.name, "qty": i.qty, "price": price, "hpp": v_hpp.get(v["_id"], p.hpp) if v else p.hpp,
+        out.append({"id": i.id or str(uuid4()), "is_printed": i.is_printed,
+                    "productId": p.id, "productName": p.name, "qty": i.qty, "price": price, "hpp": v_hpp.get(v["_id"], p.hpp) if v else p.hpp,
                     "notes": i.notes, "subtotal": price * i.qty, "variantId": i.variantId,
                     "variantName": v["variant_name"] if v else "", "variantPrice": extra})
     return out, sum(x["subtotal"] for x in out)
@@ -540,6 +545,7 @@ async def compose_bill(body: OpenBillIn, user: User, bill_id: str, timestamp: st
     wid, wname = await resolve_waiter(body.waiterId, body.waiterName, user)
     return OpenBill(
         id=bill_id, timestamp=timestamp, type=body.type, total=total, items_json=items,
+        queueNumber=body.queueNumber,
         customerName=body.customerName or (cust["name"] if cust else ""), customerId=body.customerId,
         tableId=body.tableId if body.type == "Dine In" else None, userId=user.id, userName=user.name,
         waiterName=wname, waiterId=wid,
@@ -621,6 +627,16 @@ async def update_open_bill(bid: str, body: OpenBillIn, request: Request, user: U
     old = OpenBill.from_mongo(await get_or_404("open_bills", bid, "Open bill"))
     await authorize_reduction(request, user, old, body.items, body.adminPin)
     bill = await compose_bill(body, user, bid, old.timestamp)
+    if body.queueNumber is None:
+        bill.queueNumber = old.queueNumber
+    printed_by_id = {
+        item.get("id"): item.get("is_printed", False)
+        for item in old.items_json
+        if item.get("id")
+    }
+    for item in bill.items_json:
+        if printed_by_id.get(item["id"], False):
+            item["is_printed"] = True
     await check_materials(bill.items_json)
     bill.userId, bill.userName = old.userId, old.userName
     if bill.tableId:
@@ -642,17 +658,48 @@ async def save_bill_items(bill: OpenBill, items: List[OrderItemIn]) -> OpenBill:
 
 
 def remaining_items(bill_items: List[dict], paid: List[dict]) -> List[OrderItemIn]:
-    left, notes = defaultdict(int), {}
+    if bill_items and paid and all(item.get("id") for item in bill_items + paid):
+        paid_by_id = defaultdict(int)
+        for item in paid:
+            paid_by_id[item["id"]] += item["qty"]
+        remaining = []
+        for item in bill_items:
+            paid_qty = paid_by_id.pop(item["id"], 0)
+            if paid_qty > item["qty"]:
+                raise HTTPException(400, f"Jumlah {item['productName']} melebihi pesanan di bill")
+            qty = item["qty"] - paid_qty
+            if qty > 0:
+                remaining.append(OrderItemIn(
+                    id=item["id"],
+                    is_printed=item.get("is_printed", False),
+                    productId=item["productId"],
+                    variantId=item.get("variantId"),
+                    qty=qty,
+                    notes=item.get("notes", ""),
+                ))
+        if paid_by_id:
+            raise HTTPException(400, "Item yang dibayar tidak ditemukan di bill")
+        return remaining
+
+    left, notes, item_ids, printed = defaultdict(int), {}, {}, {}
     for i in bill_items:
         k = (i["productId"], i.get("variantId"))
         left[k] += i["qty"]
         notes[k] = notes.get(k) or i.get("notes", "")
+        item_ids[k] = item_ids.get(k) or i.get("id")
+        printed[k] = printed.get(k, False) or i.get("is_printed", False)
     for p in paid:
         k = (p["productId"], p.get("variantId"))
         if left.get(k, 0) < p["qty"]:
             raise HTTPException(400, f"Jumlah {p['productName']} melebihi pesanan di bill")
         left[k] -= p["qty"]
-    return [OrderItemIn(productId=k[0], variantId=k[1], qty=v, notes=notes.get(k, "")) for k, v in left.items() if v > 0]
+    return [
+        OrderItemIn(
+            id=item_ids.get(k), is_printed=printed.get(k, False),
+            productId=k[0], variantId=k[1], qty=v, notes=notes.get(k, ""),
+        )
+        for k, v in left.items() if v > 0
+    ]
 
 
 @api.post("/open-bills/{bid}/void")
@@ -779,6 +826,7 @@ async def create_transaction(body: TransactionIn, request: Request, user: User =
         promoDiscount=promo["discount"], pointsRedeemed=pts["pointsRequired"], pointsDiscount=pts["discount"],
         tableName=table["name"] if table else "",
         customerName=customer["name"] if customer else (body.customerName or (bill.customerName if bill else "")),
+        queueNumber=body.queueNumber if body.queueNumber is not None else (bill.queueNumber if bill else None),
     )
     try:
         await db.connect()

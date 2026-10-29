@@ -74,3 +74,15 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/t
 Utilitas `src/lib/bluetoothThermalPrinter.js` mengirim struk kitchen/payment dalam perintah ESC/POS langsung ke printer, tanpa `window.print()`. Tombol contoh tersedia di `src/components/BluetoothReceiptButton.jsx`.
 
 Web Bluetooth memerlukan browser yang mendukungnya (umumnya Chrome/Edge) dan halaman HTTPS atau localhost. Tekan tombol cetak untuk memilih printer dari dialog perangkat. Perangkat tersimpan di memori halaman dan koneksi GATT dipertahankan agar cetak berikutnya tidak meminta pairing lagi; bila koneksi putus, modul mencoba menyambungkan ulang perangkat yang sama. Default layanan RPP02 adalah UUID `000018f0-0000-1000-8000-00805f9b34fb`, dengan karakteristik tulis `00002af1-0000-1000-8000-00805f9b34fb`; jika printer memakai UUID lain, berikan `serviceUuid` dan `characteristicUuid` ke komponen. Data `kitchen` menerima detail pesanan dan `items`/`items_json`; `payment` menerima detail transaksi, `items`/`items_json`, `total`, dan `profile` (`nama_usaha`, `alamat`, `kota`, `telepon`, `logo_url`). Logo dimuat melalui canvas; server logo lintas-origin harus mengizinkan CORS agar bisa dicetak, jika tidak struk tetap dicetak tanpa logo. `bill` mencetak open bill yang belum lunas melalui Bluetooth.
+
+## Login Supabase Auth
+
+Supabase client frontend memakai `@supabase/supabase-js`. Salin template konfigurasi lalu isi dari Supabase Dashboard -> Project Settings -> API:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Isi `REACT_APP_SUPABASE_URL` dan `REACT_APP_SUPABASE_ANON_KEY` di `frontend/.env`, kemudian jalankan ulang dev server (`npm start`) agar CRA membaca environment baru. Nilai anon/publishable key memang digunakan di browser; keamanan database harus ditegakkan dengan RLS. Jangan pernah gunakan `service_role` key di frontend.
+
+Layar login sekarang meminta email/password Supabase terlebih dahulu. Setelah autentikasi berhasil, sesi disimpan oleh SDK dan UI menampilkan akun POS yang role-nya cocok dengan claim `app_metadata.pos_role` (`owner` -> `admin`, `kasir` -> `kasir`, `pelayan` -> `waiter`). PIN POS yang lama tetap diminta sebagai langkah lanjutan melalui backend POS. Untuk deployment, tambahkan kedua variabel `REACT_APP_...` pada environment hosting dan build ulang.

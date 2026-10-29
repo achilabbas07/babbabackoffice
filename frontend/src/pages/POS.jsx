@@ -9,10 +9,28 @@ import { PayDialog } from "@/components/pos/PayDialog";
 import { ReceiptDialog } from "@/components/ReceiptDialog";
 import { AdminPinDialog } from "@/components/tables/AdminPinDialog";
 import { VariantDialog } from "@/components/pos/VariantDialog";
+import { supabase } from "@/supabaseClient";
 
 const emptyOrder = (user) => ({
-  billId: null, type: "Dine In", tableId: "none", customerId: "none", customerName: "", waiterName: user.role === "waiter" ? user.name : "", waiterId: user.role === "waiter" ? user.id : null,
+  billId: null, queueNumber: null, type: "Dine In", tableId: "none", customerId: "none", customerName: "", waiterName: user.role === "waiter" ? user.name : "", waiterId: user.role === "waiter" ? user.id : null,
 });
+
+const getNextQueueNumber = async () => {
+  if (!supabase) throw new Error("Supabase belum dikonfigurasi untuk membuat nomor urut.");
+  const { data: queueNumber, error } = await supabase.rpc("increment_bill_seq");
+  if (error) throw error;
+  if (queueNumber === null || queueNumber === undefined) {
+    throw new Error("Supabase tidak mengembalikan nomor urut bill.");
+  }
+  return queueNumber;
+};
+
+const createItemId = () => {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  throw new Error("Browser ini tidak mendukung pembuatan ID item yang aman.");
+};
+
+const cartItemKey = (item) => `${itemKey(item)}:${item.id || ""}`;
 
 export default function POS() {
   const { user } = useAuth();
@@ -55,9 +73,13 @@ export default function POS() {
     const tableId = params.get("table");
     if (billId) {
       api.get(`/open-bills/${billId}`).then(({ data }) => {
-        setOrder({ billId: data.id, type: data.type, tableId: data.tableId || "none", customerId: data.customerId || "none", customerName: data.customerName, waiterName: data.waiterName, waiterId: data.waiterId || null });
-        setCart(data.items_json.map((i) => ({ key: itemKey(i), productId: i.productId, variantId: i.variantId ?? null, extra: i.variantPrice || 0, variantName: i.variantName || "", name: itemName(i), price: i.price, qty: i.qty, notes: i.notes || "" })));
-        setSaved(Object.fromEntries(data.items_json.map((i) => [itemKey(i), i.qty])));
+        const billItems = data.items_json.map((i) => {
+          const id = i.id || createItemId();
+          return { key: cartItemKey({ ...i, id }), id, is_printed: Boolean(i.is_printed), productId: i.productId, variantId: i.variantId ?? null, extra: i.variantPrice || 0, variantName: i.variantName || "", name: itemName(i), price: i.price, qty: i.qty, notes: i.notes || "" };
+        });
+        setOrder({ billId: data.id, queueNumber: data.queueNumber ?? null, type: data.type, tableId: data.tableId || "none", customerId: data.customerId || "none", customerName: data.customerName, waiterName: data.waiterName, waiterId: data.waiterId || null });
+        setCart(billItems);
+        setSaved(Object.fromEntries(billItems.map((i) => [i.key, i.qty])));
         setAuthPin(null);
       }).catch((e) => toast.error(errMsg(e)));
     } else if (tableId) {
@@ -67,9 +89,10 @@ export default function POS() {
 
   const addLine = (p, v) => {
     const key = `${p.id}:${v ? v.id : ""}`;
-    setCart((c) => (c.some((i) => i.key === key)
-      ? c.map((i) => (i.key === key ? { ...i, qty: i.qty + 1 } : i))
-      : [...c, { key, productId: p.id, variantId: v ? v.id : null, extra: v ? Number(v.additional_price || 0) : 0, variantName: v ? v.variant_name : "", name: v ? v.variant_name : p.name, price: p.price, qty: 1, notes: "" }]));
+    const id = createItemId();
+    setCart((c) => (c.some((i) => itemKey(i) === key && !i.is_printed)
+      ? c.map((i) => (itemKey(i) === key && !i.is_printed ? { ...i, qty: i.qty + 1 } : i))
+      : [...c, { key: `${key}:${id}`, id, is_printed: false, productId: p.id, variantId: v ? v.id : null, extra: v ? Number(v.additional_price || 0) : 0, variantName: v ? v.variant_name : "", name: v ? v.variant_name : p.name, price: p.price, qty: 1, notes: "" }]));
   };
   const variantsOf = (p) => variants.filter((v) => v.pid === p.id);
   const add = async (p) => {
@@ -104,6 +127,7 @@ export default function POS() {
   const removeItem = (id) => guarded(id, 0, () => setCart((c) => c.filter((i) => i.key !== id)));
 
   const payload = () => ({
+    queueNumber: order.queueNumber,
     type: order.type,
     tableId: order.type === "Dine In" && order.tableId !== "none" ? order.tableId : null,
     customerId: order.customerId !== "none" ? order.customerId : null,
@@ -111,7 +135,7 @@ export default function POS() {
     waiterName: order.waiterName,
     waiterId: order.waiterId || null,
     adminPin: authPin,
-    items: cart.map(({ productId, qty, notes, variantId }) => ({ productId, qty, notes, variantId })),
+    items: cart.map(({ id, is_printed, productId, qty, notes, variantId }) => ({ id, is_printed, productId, qty, notes, variantId })),
   });
 
   const run = async (fn) => {
@@ -126,14 +150,17 @@ export default function POS() {
   };
 
   const saveBill = () => run(async () => {
-    const { data } = order.billId ? await api.put(`/open-bills/${order.billId}`, payload()) : await api.post("/open-bills", payload());
+    const body = payload();
+    if (!order.billId) body.queueNumber = await getNextQueueNumber();
+    const { data } = order.billId ? await api.put(`/open-bills/${order.billId}`, body) : await api.post("/open-bills", body);
     toast.success(`Open bill ${data.id} tersimpan`);
     reset();
     loadRefs();
   });
 
   const pay = (method, cashGiven, extra = {}) => run(async () => {
-    const { data } = await api.post("/transactions", { ...payload(), method, cashGiven, openBillId: order.billId, ...extra });
+    const queueNumber = order.billId ? order.queueNumber : await getNextQueueNumber();
+    const { data } = await api.post("/transactions", { ...payload(), queueNumber, method, cashGiven, openBillId: order.billId, ...extra });
     setPayOpen(false);
     setReceipt(data);
     toast.success(`Transaksi ${data.id} berhasil`);

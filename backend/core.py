@@ -163,6 +163,7 @@ class Transaction(BaseDocument):
     promoDiscount: float = 0
     pointsRedeemed: int = 0
     pointsDiscount: float = 0
+    queueNumber: Optional[int] = None
 
 
 class Purchase(BaseDocument):
@@ -196,6 +197,7 @@ class OpenBill(BaseDocument):
     customerId: Optional[str] = None
     userName: str = ""
     waiterId: Optional[str] = None
+    queueNumber: Optional[int] = None
 
 
 async def get_current_user(request: Request) -> User:

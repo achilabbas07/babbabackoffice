@@ -80,7 +80,8 @@ export const TableDetailDialog = ({ table, tables, onClose, onChanged, onPaid })
     try {
       const { data } = await api.post("/transactions", {
         type: bill.type, tableId: bill.tableId, customerId: bill.customerId, customerName: bill.customerName, waiterName: bill.waiterName,
-        items: pay.items.map(({ productId, qty, notes, variantId }) => ({ productId, qty, notes, variantId: variantId ?? null })), method, cashGiven, openBillId: bill.id, partial: pay.partial, ...extra,
+        queueNumber: bill.queueNumber,
+        items: pay.items.map(({ id, is_printed, productId, qty, notes, variantId }) => ({ id, is_printed, productId, qty, notes, variantId: variantId ?? null })), method, cashGiven, openBillId: bill.id, partial: pay.partial, ...extra,
       });
       setPay(null);
       setMode(null);
