@@ -93,6 +93,7 @@ export const ReceiptDialog = ({ trx, onClose }) => {
             <pre data-testid="receipt-template" className="thermal-lines">{lines.join("\n")}</pre>
             <button
               data-testid="receipt-print-button"
+              type="button"
               onClick={handlePrint}
               disabled={printing}
               className="no-print flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border font-medium hover:border-primary"

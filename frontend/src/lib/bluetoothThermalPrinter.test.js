@@ -52,7 +52,26 @@ describe("Bluetooth ESC/POS receipts", () => {
     expect(() => buildBluetoothReceiptLines("other", {})).toThrow("Jenis cetak tidak dikenal");
   });
 
-  it("requests a Bluetooth printer, writes bounded chunks, and disconnects after printing", async () => {
+  it("prints an open bill without marking it as paid", () => {
+    const lines = buildBluetoothReceiptLines("bill", {
+      id: "BILL-001",
+      tableName: "A-02",
+      time: "29/10/2026",
+      waiter: "Siti",
+      items: [{ qty: 2, name: "Kopi Susu", subtotal: 24000 }],
+      total: 24000,
+    });
+    const text = lines.map(({ text }) => text);
+
+    expect(text).toContain("OPEN BILL");
+    expect(text).toContain("No. Bill: BILL-001");
+    expect(text).toContain("2x Kopi Susu");
+    expect(text).toContain("Total Tagihan: Rp 24.000");
+    expect(text).toContain("Belum lunas");
+    expect(text.some((line) => line.includes("LUNAS"))).toBe(false);
+  });
+
+  it("reuses the Bluetooth device and reconnects without another pairing prompt", async () => {
     const writes = [];
     const characteristic = {
       properties: { writeWithoutResponse: true },
@@ -60,16 +79,17 @@ describe("Bluetooth ESC/POS receipts", () => {
     };
     const device = {
       gatt: {
-        connected: true,
-        connect: jest.fn(async () => ({
-          getPrimaryService: jest.fn(async () => ({
-            getCharacteristic: jest.fn(async (uuid) => {
-              expect(uuid).toBe(RPP02_CHARACTERISTIC_UUID);
-              return characteristic;
-            }),
-          })),
+        connected: false,
+        connect: jest.fn(async function connect() {
+          this.connected = true;
+          return this;
+        }),
+        getPrimaryService: jest.fn(async () => ({
+          getCharacteristic: jest.fn(async (uuid) => {
+            expect(uuid).toBe(RPP02_CHARACTERISTIC_UUID);
+            return characteristic;
+          }),
         })),
-        disconnect: jest.fn(),
       },
     };
     const bluetooth = { requestDevice: jest.fn(async () => device) };
@@ -88,11 +108,18 @@ describe("Bluetooth ESC/POS receipts", () => {
       acceptAllDevices: true,
       optionalServices: [RPP02_SERVICE_UUID],
     });
-    const server = await device.gatt.connect.mock.results[0].value;
-    expect(server.getPrimaryService).toHaveBeenCalledWith(RPP02_SERVICE_UUID);
+    expect(device.gatt.getPrimaryService).toHaveBeenCalledWith(RPP02_SERVICE_UUID);
     expect(writes.length).toBeGreaterThan(1);
     expect(writes.every((chunk) => chunk.byteLength <= 20)).toBe(true);
-    expect(device.gatt.disconnect).toHaveBeenCalledTimes(1);
+
+    await printBluetoothReceipt("kitchen", { items: [] });
+    expect(bluetooth.requestDevice).toHaveBeenCalledTimes(1);
+    expect(device.gatt.connect).toHaveBeenCalledTimes(1);
+
+    device.gatt.connected = false;
+    await printBluetoothReceipt("kitchen", { items: [] });
+    expect(bluetooth.requestDevice).toHaveBeenCalledTimes(1);
+    expect(device.gatt.connect).toHaveBeenCalledTimes(2);
     delete navigator.bluetooth;
   });
 });

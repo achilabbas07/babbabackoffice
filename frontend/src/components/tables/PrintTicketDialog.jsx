@@ -4,7 +4,6 @@ import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { fmtDate, itemName, rp } from "@/lib/api";
-import { printDocument } from "@/lib/print";
 import { printBluetoothReceipt } from "@/lib/bluetoothThermalPrinter";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useProfile } from "@/context/ProfileContext";
@@ -48,7 +47,17 @@ export const PrintTicketDialog = ({ bill, tableName, mode, onClose }) => {
           })),
         });
       } else {
-        printDocument("bill");
+        await printBluetoothReceipt("bill", {
+          id: bill.id,
+          tableName: tableName || bill.type || "-",
+          time: dateText,
+          waiter: bill.waiterName || bill.userName || "-",
+          items: (bill.items_json || []).map((item) => ({
+            ...item,
+            name: itemName(item),
+          })),
+          total: bill.total,
+        });
       }
       const count = incrementPrintCount(printKey);
       flushSync(() => setPrintRevision(count));
@@ -80,6 +89,7 @@ export const PrintTicketDialog = ({ bill, tableName, mode, onClose }) => {
             >{lines.join("\n")}</pre>
             <button
               data-testid={`print-${mode}-button`}
+              type="button"
               onClick={handlePrint}
               disabled={printing}
               className="no-print flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary font-medium text-primary-foreground"

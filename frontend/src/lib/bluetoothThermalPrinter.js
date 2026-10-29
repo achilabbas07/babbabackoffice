@@ -3,6 +3,7 @@ export const RPP02_CHARACTERISTIC_UUID = "00002af1-0000-1000-8000-00805f9b34fb";
 export const RECEIPT_FOOTER = "Terima Kasih Atas Kunjungan Anda";
 const LINE_WIDTH = 32;
 const BLE_WRITE_CHUNK_SIZE = 20;
+let cachedDevice = null;
 
 function encodeText(value) {
   const encoded = encodeURIComponent(value);
@@ -91,7 +92,23 @@ export function buildBluetoothReceiptLines(type, data) {
     ];
   }
 
-  throw new Error("Jenis cetak tidak dikenal. Gunakan 'kitchen' atau 'payment'.");
+  if (type === "bill") {
+    return [
+      { text: "OPEN BILL", align: "center", bold: true },
+      { text: `No. Bill: ${data.id || "-"}` },
+      { text: `Meja: ${data.tableName || data.table || "-"}` },
+      { text: `Waktu: ${data.time || data.dateTime || data.date || "-"}` },
+      ...(data.waiter ? [{ text: `Pelayan: ${data.waiter}` }] : []),
+      ...items.flatMap((item) => [
+        { text: `${item.qty ?? 1}x ${itemName(item)}` },
+        ...(item.subtotal != null ? [{ text: `  ${formatCurrency(item.subtotal)}` }] : []),
+      ]),
+      { text: `Total Tagihan: ${formatCurrency(data.total)}`, bold: true },
+      { text: "Belum lunas" },
+    ];
+  }
+
+  throw new Error("Jenis cetak tidak dikenal. Gunakan 'kitchen', 'payment', atau 'bill'.");
 }
 
 function appendBytes(target, bytes) {
@@ -174,21 +191,19 @@ export async function printBluetoothReceipt(
     throw new Error("Web Bluetooth tidak tersedia. Gunakan Chrome atau Edge melalui HTTPS.");
   }
 
-  const device = selectedDevice || await bluetooth.requestDevice({
-    acceptAllDevices: true,
-    optionalServices: [serviceUuid],
-  });
+  let device = selectedDevice || cachedDevice;
+  if (!device) {
+    device = await bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: [serviceUuid],
+    });
+  }
   if (!device?.gatt) throw new Error("Perangkat yang dipilih tidak menyediakan koneksi GATT.");
+  cachedDevice = device;
 
   const bytes = buildEscPosReceipt(type, data);
-  let connected = false;
-  try {
-    const server = await device.gatt.connect();
-    connected = true;
-    const service = await server.getPrimaryService(serviceUuid);
-    const characteristic = await findWritableCharacteristic(service, characteristicUuid);
-    await writeReceipt(characteristic, bytes);
-  } finally {
-    if (connected && device.gatt.connected) device.gatt.disconnect();
-  }
+  const server = device.gatt.connected ? device.gatt : await device.gatt.connect();
+  const service = await server.getPrimaryService(serviceUuid);
+  const characteristic = await findWritableCharacteristic(service, characteristicUuid);
+  await writeReceipt(characteristic, bytes);
 }
