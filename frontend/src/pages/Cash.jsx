@@ -7,6 +7,7 @@ import { PageHeader, StatCard, Empty } from "@/components/PageHeader";
 import { FormDialog } from "@/components/FormDialog";
 import { CloseShiftDialog } from "@/components/CloseShiftDialog";
 import { Button } from "@/components/ui/button";
+import { connectBluetoothPrinter } from "@/lib/bluetoothThermalPrinter";
 
 const FIELDS = [
   { name: "amount", label: "Jumlah (Rp)", type: "number", required: true },
@@ -22,17 +23,12 @@ export default function Cash() {
   const [connectingPrinter, setConnectingPrinter] = useState("");
 
   const connectPrinter = async (field, label) => {
-    if (!navigator.bluetooth?.requestDevice) {
-      toast.error("Browser ini tidak mendukung Web Bluetooth. Gunakan browser yang kompatibel melalui HTTPS.");
-      return;
-    }
-
     setConnectingPrinter(field);
     try {
-      const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true });
+      const device = await connectBluetoothPrinter();
       if (!device.name) throw new Error("Nama perangkat Bluetooth tidak tersedia.");
       await api.put("/app-profile/printers", { [field]: device.name });
-      toast.success(`${label} tersimpan: ${device.name}`);
+      toast.success(`${label} terhubung dan tersimpan: ${device.name}`);
     } catch (err) {
       toast.error(err.name === "NotFoundError" ? "Pemilihan perangkat dibatalkan." : errMsg(err));
     } finally {

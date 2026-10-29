@@ -50,12 +50,12 @@ export function wordWrapCenter(text) {
   return wrapText(text);
 }
 
-export function formatLine(leftText, rightText) {
+export function formatLine(leftText, rightText, width = LINE_WIDTH) {
   const left = String(leftText ?? "");
   const right = String(rightText ?? "");
-  if (right.length >= LINE_WIDTH) return right.slice(-LINE_WIDTH);
-  const leftWidth = Math.max(0, LINE_WIDTH - right.length - 1);
-  return `${left.slice(0, leftWidth).padEnd(leftWidth)}${right.padStart(LINE_WIDTH - leftWidth)}`;
+  if (right.length >= width) return right.slice(-width);
+  const leftWidth = Math.max(0, width - right.length - 1);
+  return `${left.slice(0, leftWidth).padEnd(leftWidth)}${right.padStart(width - leftWidth)}`;
 }
 
 function itemName(item) {
@@ -131,11 +131,8 @@ function paymentLines(data) {
     ...(isCash
       ? [{ type: "text", text: formatLine("Kembalian", formatCurrency(data.change ?? 0)) }]
       : []),
-    { type: "text", text: "================================" },
-    { type: "center", text: data.platform || "Shopee food : Warkop Babba -" },
-    { type: "center", text: "Bontoala" },
-    { type: "center", text: RECEIPT_FOOTER },
-    { type: "center", text: "instagram:warkopbabba_mks" },
+    { type: "text", text: "================================" },    
+    { type: "center", text: RECEIPT_FOOTER },    
     { type: "blank", text: "" },
     { type: "center", text: `Terbayar  ${data.paidAt || data.paymentTime || data.time || data.dateTime || data.date || "-"}` },
     { type: "center", text: `dicetak: ${data.cashier || data.cashierName || data.userName || "-"}` },
@@ -173,7 +170,7 @@ function kitchenLines(data) {
   lines.push(
     { type: "text", text: "================================" },
     { type: "center", text: orderTime || "-" },
-    { type: "center", text: `dicetak: ${data.waiter || "-"}` },
+    { type: "center", text: `order: ${data.waiter || "-"}` },
   );
   return lines;
 }
@@ -201,6 +198,69 @@ function billLines(data) {
   return lines;
 }
 
+function shiftDate(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? String(value)
+    : date.toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
+}
+
+function shiftAmount(value) {
+  const amount = Number(value ?? 0);
+  if (!Number.isFinite(amount)) throw new Error("Nominal laporan shift tidak valid.");
+  return `Rp ${new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(amount)}`;
+}
+
+function shiftRow(label, value, { compact = false } = {}) {
+  const width = compact ? 42 : LINE_WIDTH;
+  if (Array.from(`${label} ${value}`).length <= width) {
+    return [{ type: "justify", text: formatLine(label, value, width), compact }];
+  }
+  return [
+    ...wrapText(label).map((text) => ({ type: "justify", text })),
+    { type: "justify", text: value.padStart(LINE_WIDTH) },
+  ];
+}
+
+export function buildBluetoothShiftReportLines(shift, { reprint = false } = {}) {
+  if (!shift || typeof shift !== "object") {
+    throw new Error("Data laporan shift tidak valid.");
+  }
+
+  const totalSales = Number(shift.cashSales || 0) + Number(shift.nonCashSales || 0);
+  const lines = [
+    { type: "center", text: "WARKOP BABBA", bold: true },
+    { type: "center", text: "Jl. Ujung No. 65, Makassar" },
+    { type: "center", text: "Telp. 0853 9886 3700" },
+    { type: "center", text: "LAPORAN TUTUP SHIFT", bold: true },
+    ...(reprint
+      ? [{ type: "justify", text: formatLine(shift.id || "-", "CETAK ULANG"), bold: true }]
+      : [{ type: "center", text: shift.id || "-" }]),
+    { type: "text", text: "-".repeat(LINE_WIDTH) },
+    ...shiftRow("Kasir", shift.userName || "-"),
+    ...shiftRow("Dibuka", shiftDate(shift.openedAt)),
+    ...shiftRow("Ditutup", shiftDate(shift.closedAt)),
+    ...shiftRow("Jumlah transaksi", String(shift.trxCount ?? 0)),
+    { type: "text", text: "-".repeat(LINE_WIDTH) },
+    ...shiftRow("Saldo awal", shiftAmount(shift.openingCash)),
+    ...shiftRow("Penjualan tunai", shiftAmount(shift.cashSales)),
+    ...shiftRow("Penjualan non-tunai", shiftAmount(shift.nonCashSales)),
+    ...shiftRow("Total penjualan", shiftAmount(totalSales)).map((line) => ({ ...line, bold: true })),
+    ...shiftRow("Kas masuk", shiftAmount(shift.cashIn)),
+    ...shiftRow("Kas keluar", `- ${shiftAmount(shift.cashOut)}`),
+    { type: "text", text: "-".repeat(LINE_WIDTH) },
+    ...shiftRow(
+      "Saldo akhir (seharusnya)",
+      shift.expectedCash == null ? "-" : shiftAmount(shift.expectedCash),
+      { compact: true },
+    ).map((line) => ({ ...line, bold: true })),
+    ...shiftRow("Uang fisik", shift.countedCash == null ? "-" : shiftAmount(shift.countedCash)),
+    ...shiftRow("Selisih", shift.difference == null ? "-" : shiftAmount(shift.difference)),
+  ];
+  return lines;
+}
+
 export function buildBluetoothReceiptLines(type, data) {
   if (!data || typeof data !== "object") {
     throw new Error("Data struk tidak valid.");
@@ -211,7 +271,8 @@ export function buildBluetoothReceiptLines(type, data) {
   if (type === "kitchen") return kitchenLines(data);
   if (type === "payment") return paymentLines(data);
   if (type === "bill") return billLines(data);
-  throw new Error("Jenis cetak tidak dikenal. Gunakan 'kitchen', 'payment', atau 'bill'.");
+  if (type === "shift") return buildBluetoothShiftReportLines(data, { reprint: data.isReprint === true });
+  throw new Error("Jenis cetak tidak dikenal. Gunakan 'kitchen', 'payment', 'bill', atau 'shift'.");
 }
 
 function appendBytes(target, bytes) {
@@ -297,6 +358,7 @@ export async function buildEscPosReceipt(type, data) {
       continue;
     }
     command(0x1b, 0x61, line.type === "center" ? 0x01 : 0x00);
+    if (line.compact) command(0x1b, 0x4d, 0x01);
     if (line.bold) command(0x1b, 0x45, 0x01);
 
     const textLines = line.type === "center"
@@ -308,6 +370,7 @@ export async function buildEscPosReceipt(type, data) {
     }
 
     if (line.bold) command(0x1b, 0x45, 0x00);
+    if (line.compact) command(0x1b, 0x4d, 0x00);
   }
   command(0x1b, 0x61, 0x00);
   command(0x0a, 0x0a, 0x0a);
@@ -350,11 +413,32 @@ async function writeReceipt(characteristic, bytes) {
   }
 }
 
+async function connectDevice(device, serviceUuid, characteristicUuid) {
+  if (!device?.gatt) throw new Error("Perangkat yang dipilih tidak menyediakan koneksi GATT.");
+  const server = device.gatt.connected ? device.gatt : await device.gatt.connect();
+  const service = await server.getPrimaryService(serviceUuid);
+  const characteristic = await findWritableCharacteristic(service, characteristicUuid);
+  return { device, characteristic };
+}
+
+export async function connectBluetoothPrinter({
+  serviceUuid = RPP02_SERVICE_UUID,
+  characteristicUuid = RPP02_CHARACTERISTIC_UUID,
+} = {}) {
+  const devicePromise = selectBluetoothPrinter(serviceUuid);
+  const connectionPromise = devicePromise.then((device) =>
+    connectDevice(device, serviceUuid, characteristicUuid),
+  );
+  const { device } = await connectionPromise;
+  return device;
+}
+
 export async function printBluetoothReceipt(
   type,
   data,
   {
     device: selectedDevice,
+    requireConnectedDevice = false,
     serviceUuid = RPP02_SERVICE_UUID,
     characteristicUuid = RPP02_CHARACTERISTIC_UUID,
   } = {},
@@ -364,14 +448,23 @@ export async function printBluetoothReceipt(
     throw new Error("Web Bluetooth tidak tersedia. Gunakan Chrome atau Edge melalui HTTPS.");
   }
 
-  const device = selectedDevice || await selectBluetoothPrinter(serviceUuid);
-  if (!device?.gatt) throw new Error("Perangkat yang dipilih tidak menyediakan koneksi GATT.");
-  cachedDevice = device;
-
+  if (requireConnectedDevice && !selectedDevice && !cachedDevice) {
+    throw new Error("Printer kasir belum terhubung. Hubungkan printer sebelum menutup shift.");
+  }
+  const devicePromise = selectedDevice
+    ? Promise.resolve(selectedDevice)
+    : requireConnectedDevice
+      ? Promise.resolve(cachedDevice)
+      : selectBluetoothPrinter(serviceUuid);
+  const connectionPromise = devicePromise.then((device) => {
+    if (requireConnectedDevice && !device?.gatt?.connected) {
+      throw new Error("Printer kasir terputus. Hubungkan kembali printer sebelum menutup shift.");
+    }
+    cachedDevice = device;
+    return connectDevice(device, serviceUuid, characteristicUuid);
+  });
   const bytes = await buildEscPosReceipt(type, data);
-  const server = device.gatt.connected ? device.gatt : await device.gatt.connect();
-  const service = await server.getPrimaryService(serviceUuid);
-  const characteristic = await findWritableCharacteristic(service, characteristicUuid);
+  const { characteristic } = await connectionPromise;
   await writeReceipt(characteristic, bytes);
 }
 

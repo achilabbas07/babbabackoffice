@@ -1,5 +1,6 @@
 import {
   buildBluetoothReceiptLines,
+  buildBluetoothShiftReportLines,
   buildEscPosReceipt,
   convertImageToESCPOS,
   formatLine,
@@ -10,6 +11,45 @@ import {
 } from "./bluetoothThermalPrinter";
 
 describe("Bluetooth ESC/POS receipts", () => {
+  it("builds the close-shift report and adds the reprint marker beside its ID", () => {
+    const shift = {
+      id: "SHIFT-20261030-001",
+      userName: "Kasir Pagi",
+      openedAt: "2026-10-30T01:00:00+08:00",
+      closedAt: "2026-10-30T09:00:00+08:00",
+      trxCount: 12,
+      openingCash: 100000,
+      cashSales: 250000,
+      nonCashSales: 75000,
+      cashIn: 10000,
+      cashOut: 5000,
+      expectedCash: 355000,
+      countedCash: 350000,
+      difference: -5000,
+    };
+    const lines = buildBluetoothShiftReportLines(shift);
+    const reprintLines = buildBluetoothShiftReportLines(shift, { reprint: true });
+
+    expect(lines.slice(0, 4).map(({ text, type }) => [text, type])).toEqual([
+      ["WARKOP BABBA", "center"],
+      ["Jl. Ujung No. 65, Makassar", "center"],
+      ["Telp. 0853 9886 3700", "center"],
+      ["LAPORAN TUTUP SHIFT", "center"],
+    ]);
+    expect(lines.map(({ text }) => text)).toContain("Penjualan tunai       Rp 250.000");
+    expect(lines.find(({ text }) => text.includes("Total penjualan"))).toMatchObject({ bold: true });
+    expect(lines.find(({ text }) => text.includes("Saldo akhir"))).toMatchObject({ bold: true, compact: true });
+    expect(lines.find(({ text }) => text.includes("Saldo akhir")).text).toHaveLength(42);
+    expect(lines[4].text).toBe(shift.id);
+    expect(reprintLines[4].text).toContain(shift.id);
+    expect(reprintLines[4].text).toContain("CETAK ULANG");
+    expect(reprintLines[4].bold).toBe(true);
+
+    const openShiftLines = buildBluetoothShiftReportLines({ ...shift, countedCash: null, difference: null });
+    expect(openShiftLines.find(({ text }) => text.startsWith("Uang fisik"))?.text.trimEnd()).toMatch(/-$/);
+    expect(openShiftLines.find(({ text }) => text.startsWith("Selisih"))?.text.trimEnd()).toMatch(/-$/);
+  });
+
   it("builds a centered kitchen ticket with fixed-position metadata and indented notes", () => {
     const lines = buildBluetoothReceiptLines("kitchen", {
       id: "ORD-001",
@@ -231,11 +271,13 @@ describe("Bluetooth ESC/POS receipts", () => {
       value: bluetooth,
     });
 
-    await printBluetoothReceipt("kitchen", {
+    const printPromise = printBluetoothReceipt("kitchen", {
       tableName: "A-02",
       time: "29/10/2026",
       items: [{ qty: 1, name: "Nasi Goreng" }],
     });
+    expect(bluetooth.requestDevice).toHaveBeenCalledTimes(1);
+    await printPromise;
 
     expect(bluetooth.requestDevice).toHaveBeenCalledWith({
       acceptAllDevices: true,
@@ -253,6 +295,31 @@ describe("Bluetooth ESC/POS receipts", () => {
     await printBluetoothReceipt("kitchen", { items: [] });
     expect(bluetooth.requestDevice).toHaveBeenCalledTimes(1);
     expect(device.gatt.connect).toHaveBeenCalledTimes(2);
+    await printBluetoothReceipt("shift", { items: [], id: "SHIFT-001" }, { requireConnectedDevice: true });
+    expect(bluetooth.requestDevice).toHaveBeenCalledTimes(1);
     delete navigator.bluetooth;
+  });
+
+  it("builds shift reports as ESC/POS with center alignment, justification and bold commands", async () => {
+    const bytes = await buildEscPosReceipt("shift", {
+      id: "SHIFT-001",
+      isReprint: true,
+      userName: "Kasir",
+      openedAt: "2026-10-30T01:00:00+08:00",
+      closedAt: "2026-10-30T09:00:00+08:00",
+      trxCount: 1,
+      openingCash: 0,
+      cashSales: 10000,
+      nonCashSales: 0,
+      cashIn: 0,
+      cashOut: 0,
+      expectedCash: 10000,
+      countedCash: 10000,
+      difference: 0,
+    });
+
+    expect(Array.from(bytes)).toContain(0x1b);
+    expect(String.fromCharCode(...bytes)).toContain("CETAK ULANG");
+    expect(Array.from(bytes)).toContain(0x45);
   });
 });

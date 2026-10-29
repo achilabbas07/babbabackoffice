@@ -3,27 +3,23 @@ import { Bluetooth } from "lucide-react";
 import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
 import { useProfile } from "@/context/ProfileContext";
+import { connectBluetoothPrinter } from "@/lib/bluetoothThermalPrinter";
 
 export const WaiterPrinterButton = () => {
   const { profile, setProfile } = useProfile();
   const [connecting, setConnecting] = useState(false);
 
   const connectPrinter = async () => {
-    if (!navigator.bluetooth?.requestDevice) {
-      toast.error("Browser tidak mendukung Bluetooth. Gunakan Chrome atau Edge melalui HTTPS.");
-      return;
-    }
-
     setConnecting(true);
     try {
-      const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true });
+      const device = await connectBluetoothPrinter();
       if (!device.name) {
         throw new Error("Nama perangkat Bluetooth tidak tersedia.");
       }
 
       const { data } = await api.put("/app-profile/printers", { printerDapur: device.name });
       setProfile((current) => ({ ...current, ...data }));
-      toast.success(`Printer dapur dipilih: ${device.name}. Pilih printer ini saat dialog cetak dibuka.`);
+      toast.success(`Printer dapur terhubung: ${device.name}.`);
     } catch (error) {
       toast.error(error.name === "NotFoundError" ? "Pemilihan printer dibatalkan." : errMsg(error));
     } finally {

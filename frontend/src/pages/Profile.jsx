@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Link2, Save } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
+import { connectBluetoothPrinter } from "@/lib/bluetoothThermalPrinter";
 import { useProfile } from "@/context/ProfileContext";
 import { PageHeader } from "@/components/PageHeader";
 import { PrintHeader, PrintFooter } from "@/components/ReceiptDialog";
@@ -51,22 +52,17 @@ export default function Profile() {
   }, [profile]);
 
   const connectPrinter = async (fieldName, label) => {
-    if (!navigator.bluetooth?.requestDevice) {
-      toast.error("Browser ini tidak mendukung Web Bluetooth. Coba gunakan Chrome atau Edge pada koneksi aman (HTTPS).");
-      return;
-    }
-
     setConnectingPrinter(fieldName);
     try {
-      const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true });
+      const device = await connectBluetoothPrinter();
       if (!device.name) {
         toast.error(`Nama perangkat ${label} tidak tersedia.`);
         return;
       }
       setForm((current) => ({ ...current, [fieldName]: device.name }));
-      toast.success(`${label} dipilih: ${device.name}`);
+      toast.success(`${label} terhubung: ${device.name}`);
     } catch (err) {
-      toast.error(err.name === "NotFoundError" ? "Pemilihan perangkat dibatalkan." : `Gagal menghubungkan ${label}: ${err.message}`);
+      toast.error(err.name === "NotFoundError" ? "Pemilihan perangkat dibatalkan." : `Gagal menghubungkan ${label}: ${errMsg(err)}`);
     } finally {
       setConnectingPrinter("");
     }

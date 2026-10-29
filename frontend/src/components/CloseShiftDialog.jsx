@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { api, errMsg, rp } from "@/lib/api";
+import { printBluetoothReceipt } from "@/lib/bluetoothThermalPrinter";
 
 const Row = ({ label, value, strong, tone = "", testid }) => (
   <div className={`flex justify-between py-1.5 text-sm ${strong ? "font-semibold" : ""}`}>
@@ -51,6 +53,12 @@ export const CloseShiftDialog = ({ open, onOpenChange, onClosed }) => {
     try {
       const { data } = await api.post("/shifts/close", { countedCash: Number(counted) || 0, note });
       setResult(data);
+      try {
+        await printBluetoothReceipt("shift", data, { requireConnectedDevice: true });
+        toast.success("Shift ditutup dan laporan berhasil dicetak.");
+      } catch (printError) {
+        toast.error(`Shift ditutup, tetapi laporan gagal dicetak: ${printError.message}`);
+      }
     } catch (e) {
       setError(errMsg(e));
     } finally {
