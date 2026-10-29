@@ -68,3 +68,9 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 ### `npm run build` fails to minify
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+
+## Cetak langsung via Bluetooth
+
+Utilitas `src/lib/bluetoothThermalPrinter.js` mengirim struk kitchen/payment dalam perintah ESC/POS langsung ke printer, tanpa `window.print()`. Tombol contoh tersedia di `src/components/BluetoothReceiptButton.jsx`.
+
+Web Bluetooth memerlukan browser yang mendukungnya (umumnya Chrome/Edge) dan halaman HTTPS atau localhost. Tekan tombol cetak untuk memilih printer dari dialog perangkat. Default layanan RPP02 adalah UUID `18f0`; jika printer memakai UUID lain, berikan `serviceUuid` dan bila perlu `characteristicUuid` ke komponen. Data `kitchen` menerima `tableName`, `time`, dan `items`/`items_json`; `payment` menerima `transactionNo`, `cashier`, `items`/`items_json`, serta `total`.
