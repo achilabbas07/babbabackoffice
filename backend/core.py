@@ -199,6 +199,12 @@ class OpenBill(BaseDocument):
     waiterId: Optional[str] = None
     queueNumber: Optional[int] = None
 
+    def to_mongo(self) -> dict:
+        data = super().to_mongo()
+        if data["queueNumber"] is not None:
+            data["queueNumber"] = str(data["queueNumber"])
+        return data
+
 
 async def get_current_user(request: Request) -> User:
     auth = request.headers.get("Authorization", "")
