@@ -75,9 +75,8 @@ const FullscreenButton = () => {
       await requestFullscreen.call(root);
     } catch (error) {
       activateInPageFullscreen();
-      toast.info(error?.message
-        ? `Layar penuh browser ditolak. Tampilan penuh di halaman diaktifkan: ${error.message}`
-        : "Layar penuh browser ditolak. Tampilan penuh di halaman diaktifkan.");
+      console.warn("Browser fullscreen was denied; using the in-page fallback.", error);
+      toast.info("Tampilan aplikasi diperluas. Bilah browser tetap terlihat karena izin layar penuh tidak diberikan.");
     }
   };
   const Icon = isFull ? Minimize : Maximize;
