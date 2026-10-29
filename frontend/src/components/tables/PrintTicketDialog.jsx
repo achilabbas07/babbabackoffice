@@ -38,8 +38,11 @@ export const PrintTicketDialog = ({ bill, tableName, mode, onClose }) => {
     try {
       if (kitchen) {
         await printBluetoothReceipt("kitchen", {
+          id: bill.id,
           tableName: tableName || bill.type || "-",
           time: dateText,
+          queueNumber: bill.queueNumber,
+          waiter: bill.waiterName || bill.userName || "-",
           items: (bill.items_json || []).map((item) => ({
             ...item,
             name: itemName(item),

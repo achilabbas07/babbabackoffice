@@ -46,19 +46,142 @@ function wrapText(value, width = LINE_WIDTH) {
   return lines;
 }
 
+export function wordWrapCenter(text) {
+  return wrapText(text);
+}
+
+export function formatLine(leftText, rightText) {
+  const left = String(leftText ?? "");
+  const right = String(rightText ?? "");
+  if (right.length >= LINE_WIDTH) return right.slice(-LINE_WIDTH);
+  const leftWidth = Math.max(0, LINE_WIDTH - right.length - 1);
+  return `${left.slice(0, leftWidth).padEnd(leftWidth)}${right.padStart(LINE_WIDTH - leftWidth)}`;
+}
+
 function itemName(item) {
   return item.name || item.variantName || item.menuName || item.productName || "Menu";
 }
 
 function formatCurrency(value) {
-  if (typeof value === "string" && value.trim()) return value;
-  const amount = Number(value);
-  if (!Number.isFinite(amount)) throw new Error("Total pembayaran tidak valid.");
+  if (typeof value === "string" && value.trim()) return value.replace(/\u00a0/g, " ");
+  const amount = Number(value ?? 0);
+  if (!Number.isFinite(amount)) throw new Error("Nilai pembayaran tidak valid.");
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(amount).replace(/\u00a0/g, " ");
+}
+
+function fieldLine(label, value) {
+  return `${label.padEnd(11)}: ${value || "-"}`;
+}
+
+function itemTotal(item) {
+  return Number(item.subtotal ?? Number(item.price || 0) * Number(item.qty ?? 1));
+}
+
+function paymentLines(data) {
+  const items = data.items || data.items_json || [];
+  const profile = data.profile || {};
+  const lines = [
+    { type: "center", text: profile.nama_usaha || "" , bold: true },
+    ...wordWrapCenter(profile.alamat || "").map((text) => ({ type: "center", text })),
+    ...wordWrapCenter(profile.kota || "").map((text) => ({ type: "center", text })),
+    ...wordWrapCenter(profile.telepon || "").map((text) => ({ type: "center", text })),
+    { type: "text", text: "================================" },
+    { type: "text", text: fieldLine("No Nota", data.id || data.transactionNo || data.transactionId) },
+    { type: "text", text: fieldLine("Waktu", data.time || data.dateTime || data.date) },
+    { type: "text", text: fieldLine("No Urut", data.queueNumber) },
+    { type: "text", text: fieldLine("Order", data.cashier || data.cashierName || data.userName) },
+    { type: "text", text: fieldLine("Customer", data.customerName) },
+    { type: "text", text: fieldLine("Nomor Meja", data.tableName || data.table) },
+    { type: "text", text: "--------------------------------" },
+  ];
+
+  for (const item of items) {
+    const qty = item.qty ?? 1;
+    lines.push({
+      type: "text",
+      text: formatLine(`${qty} ${itemName(item)}`, formatCurrency(itemTotal(item))),
+    });
+  }
+
+  const itemCount = items.reduce((count, item) => count + Number(item.qty ?? 1), 0);
+  const subtotal = data.subtotal ?? items.reduce((sum, item) => sum + itemTotal(item), 0);
+  const total = data.total ?? subtotal;
+  const cash = data.cashGiven ?? data.cash ?? 0;
+  const paid = data.totalPaid ?? data.amountPaid ?? cash;
+
+  lines.push(
+    { type: "text", text: "--------------------------------" },
+    { type: "text", text: formatLine(`Subtotal ${itemCount} Produk`, formatCurrency(subtotal)) },
+    { type: "text", text: formatLine("Total", formatCurrency(total)), bold: true },
+    { type: "text", text: "--------------------------------" },
+    { type: "text", text: formatLine("Tunai", formatCurrency(cash)) },
+    { type: "text", text: formatLine("Total Bayar", formatCurrency(paid)) },
+    { type: "text", text: formatLine("Kembalian", formatCurrency(data.change ?? 0)) },
+    { type: "text", text: "================================" },
+    { type: "center", text: data.platform || "Shopee food : Warkop Babba -" },
+    { type: "center", text: "Bontoala" },
+    { type: "center", text: "TERIMA KASIH" },
+    { type: "center", text: "instagram:warkopbabba_mks" },
+    { type: "blank", text: "" },
+    { type: "center", text: `Terbayar  ${data.time || data.dateTime || data.date || "-"}` },
+    { type: "center", text: `dicetak: ${data.cashier || data.cashierName || data.userName || "-"}` },
+  );
+  return lines;
+}
+
+function kitchenLines(data) {
+  const items = data.items || data.items_json || [];
+  const lines = [
+    { type: "center", text: "DAPUR" },
+    { type: "blank", text: "" },
+    { type: "text", text: fieldLine("No Nota", data.id || data.transactionNo) },
+    { type: "text", text: fieldLine("Waktu", data.time || data.dateTime || data.date) },
+    { type: "text", text: fieldLine("No Urut", data.queueNumber) },
+    { type: "text", text: fieldLine("Order", data.waiter) },
+    { type: "text", text: fieldLine("Nomor Meja", data.tableName || data.table) },
+    { type: "text", text: "--------------------------------" },
+  ];
+
+  for (const item of items) {
+    lines.push({ type: "text", text: `${item.qty ?? 1} ${itemName(item)}` });
+    if (item.note || item.notes) {
+      lines.push(
+        ...wrapText(item.note || item.notes, LINE_WIDTH - 2)
+          .map((text) => ({ type: "text", text: `  ${text}` })),
+      );
+    }
+  }
+
+  lines.push(
+    { type: "text", text: "================================" },
+    { type: "center", text: data.time || data.dateTime || data.date || "-" },
+    { type: "center", text: `dicetak: ${data.waiter || "-"}` },
+  );
+  return lines;
+}
+
+function billLines(data) {
+  const items = data.items || data.items_json || [];
+  const lines = [
+    { type: "center", text: "OPEN BILL", bold: true },
+    { type: "text", text: fieldLine("No Bill", data.id) },
+    { type: "text", text: fieldLine("Waktu", data.time || data.dateTime || data.date) },
+    { type: "text", text: fieldLine("Nomor Meja", data.tableName || data.table) },
+    { type: "text", text: "--------------------------------" },
+  ];
+  for (const item of items) {
+    lines.push({ type: "text", text: formatLine(`${item.qty ?? 1} ${itemName(item)}`, formatCurrency(itemTotal(item))) });
+  }
+  lines.push(
+    { type: "text", text: "--------------------------------" },
+    { type: "text", text: formatLine("Total Tagihan", formatCurrency(data.total)), bold: true },
+    { type: "center", text: "Belum lunas" },
+  );
+  return lines;
 }
 
 export function buildBluetoothReceiptLines(type, data) {
@@ -68,73 +191,104 @@ export function buildBluetoothReceiptLines(type, data) {
 
   const items = data.items || data.items_json || [];
   if (!Array.isArray(items)) throw new Error("Daftar item struk tidak valid.");
-
-  if (type === "kitchen") {
-    return [
-      { text: "ORDER DAPUR", align: "center", bold: true },
-      { text: `No. Meja: ${data.tableName || data.table || "-"}` },
-      { text: `Waktu: ${data.time || data.dateTime || data.date || "-"}` },
-      ...items.flatMap((item) => [
-        { text: `${item.qty ?? 1}x ${itemName(item)}` },
-        ...(item.note || item.notes ? [{ text: `Catatan: ${item.note || item.notes}` }] : []),
-      ]),
-    ];
-  }
-
-  if (type === "payment") {
-    return [
-      { text: "WARKOP BABBA", align: "center", bold: true },
-      { text: `No. Transaksi: ${data.transactionNo || data.transactionId || data.id || "-"}` },
-      { text: `Kasir: ${data.cashier || data.cashierName || data.userName || "-"}` },
-      ...items.map((item) => ({ text: `${item.qty ?? 1}x ${itemName(item)}` })),
-      { text: `Total: ${formatCurrency(data.total)} (LUNAS)`, bold: true },
-      { text: RECEIPT_FOOTER, align: "center", condensed: true },
-    ];
-  }
-
-  if (type === "bill") {
-    return [
-      { text: "OPEN BILL", align: "center", bold: true },
-      { text: `No. Bill: ${data.id || "-"}` },
-      { text: `Meja: ${data.tableName || data.table || "-"}` },
-      { text: `Waktu: ${data.time || data.dateTime || data.date || "-"}` },
-      ...(data.waiter ? [{ text: `Pelayan: ${data.waiter}` }] : []),
-      ...items.flatMap((item) => [
-        { text: `${item.qty ?? 1}x ${itemName(item)}` },
-        ...(item.subtotal != null ? [{ text: `  ${formatCurrency(item.subtotal)}` }] : []),
-      ]),
-      { text: `Total Tagihan: ${formatCurrency(data.total)}`, bold: true },
-      { text: "Belum lunas" },
-    ];
-  }
-
+  if (type === "kitchen") return kitchenLines(data);
+  if (type === "payment") return paymentLines(data);
+  if (type === "bill") return billLines(data);
   throw new Error("Jenis cetak tidak dikenal. Gunakan 'kitchen', 'payment', atau 'bill'.");
 }
 
 function appendBytes(target, bytes) {
-  target.push(...bytes);
+  for (const byte of bytes) target.push(byte);
 }
 
-export function buildEscPosReceipt(type, data) {
+export async function convertImageToESCPOS(imageUrl) {
+  if (!imageUrl || typeof Image === "undefined" || typeof document === "undefined") {
+    return new Uint8Array();
+  }
+
+  try {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    await new Promise((resolve, reject) => {
+      image.onload = resolve;
+      image.onerror = () => reject(new Error("Logo tidak dapat dimuat."));
+      image.src = imageUrl;
+    });
+
+    const sourceWidth = image.naturalWidth || image.width;
+    const sourceHeight = image.naturalHeight || image.height;
+    if (!sourceWidth || !sourceHeight) throw new Error("Dimensi logo tidak valid.");
+
+    const width = Math.min(384, sourceWidth);
+    const height = Math.max(1, Math.round((sourceHeight * width) / sourceWidth));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) throw new Error("Canvas tidak tersedia untuk mengolah logo.");
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+
+    const pixels = context.getImageData(0, 0, width, height).data;
+    const bytesPerRow = Math.ceil(width / 8);
+    const raster = new Uint8Array(bytesPerRow * height);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const pixelIndex = (y * width + x) * 4;
+        const grayscale = (pixels[pixelIndex] * 299 + pixels[pixelIndex + 1] * 587 + pixels[pixelIndex + 2] * 114) / 1000;
+        if (grayscale < 160) {
+          raster[y * bytesPerRow + Math.floor(x / 8)] |= 0x80 >> (x % 8);
+        }
+      }
+    }
+
+    const commandBytes = Uint8Array.from([
+      0x1d, 0x76, 0x30, 0x00,
+      bytesPerRow & 0xff, (bytesPerRow >> 8) & 0xff,
+      height & 0xff, (height >> 8) & 0xff,
+    ]);
+    const imageBytes = new Uint8Array(commandBytes.length + raster.length);
+    imageBytes.set(commandBytes);
+    imageBytes.set(raster, commandBytes.length);
+    return imageBytes;
+  } catch (error) {
+    console.warn("Logo struk tidak dapat dicetak; melanjutkan tanpa logo.", error);
+    return new Uint8Array();
+  }
+}
+
+export async function buildEscPosReceipt(type, data) {
   const lines = buildBluetoothReceiptLines(type, data);
   const bytes = [];
   const command = (...values) => appendBytes(bytes, values);
   const writeText = (text) => appendBytes(bytes, encodeText(text));
 
   command(0x1b, 0x40); // Initialize printer.
-  for (const line of lines) {
-    command(0x1b, 0x61, line.align === "center" ? 0x01 : 0x00);
-    if (line.condensed) command(0x1b, 0x21, 0x01);
-    else if (line.bold) command(0x1b, 0x45, 0x01);
+  if (type === "payment" && data.profile?.logo_url) {
+    const logoBytes = await convertImageToESCPOS(data.profile.logo_url);
+    if (logoBytes.length) command(0x1b, 0x61, 0x01);
+    appendBytes(bytes, logoBytes);
+    if (logoBytes.length) command(0x0a, 0x1b, 0x61, 0x00);
+  }
 
-    const textLines = line.condensed ? [line.text] : wrapText(line.text);
+  for (const line of lines) {
+    if (line.type === "blank") {
+      command(0x0a);
+      continue;
+    }
+    command(0x1b, 0x61, line.type === "center" ? 0x01 : 0x00);
+    if (line.bold) command(0x1b, 0x45, 0x01);
+
+    const textLines = line.type === "center"
+      ? wordWrapCenter(line.text)
+      : line.text.length <= LINE_WIDTH ? [line.text] : wrapText(line.text);
     for (const textLine of textLines) {
       writeText(textLine);
       command(0x0a);
     }
 
-    if (line.condensed) command(0x1b, 0x21, 0x00);
-    else if (line.bold) command(0x1b, 0x45, 0x00);
+    if (line.bold) command(0x1b, 0x45, 0x00);
   }
   command(0x1b, 0x61, 0x00);
   command(0x0a, 0x0a, 0x0a);
@@ -201,7 +355,7 @@ export async function printBluetoothReceipt(
   if (!device?.gatt) throw new Error("Perangkat yang dipilih tidak menyediakan koneksi GATT.");
   cachedDevice = device;
 
-  const bytes = buildEscPosReceipt(type, data);
+  const bytes = await buildEscPosReceipt(type, data);
   const server = device.gatt.connected ? device.gatt : await device.gatt.connect();
   const service = await server.getPrimaryService(serviceUuid);
   const characteristic = await findWritableCharacteristic(service, characteristicUuid);

@@ -1,48 +1,81 @@
 import {
   buildBluetoothReceiptLines,
   buildEscPosReceipt,
+  convertImageToESCPOS,
+  formatLine,
   printBluetoothReceipt,
-  RECEIPT_FOOTER,
   RPP02_CHARACTERISTIC_UUID,
   RPP02_SERVICE_UUID,
+  wordWrapCenter,
 } from "./bluetoothThermalPrinter";
 
 describe("Bluetooth ESC/POS receipts", () => {
-  it("builds a kitchen ticket without a business header and includes item notes", () => {
+  it("builds a centered kitchen ticket with fixed-position metadata and indented notes", () => {
     const lines = buildBluetoothReceiptLines("kitchen", {
+      id: "ORD-001",
       tableName: "A-02",
       time: "29/10/2026 10:00",
+      queueNumber: 7,
+      waiter: "Siti",
       items: [{ qty: 2, name: "Mie Goreng", note: "Tidak pedas" }],
     });
 
-    expect(lines[0]).toMatchObject({ text: "ORDER DAPUR", align: "center" });
-    expect(lines.map(({ text }) => text)).toEqual([
-      "ORDER DAPUR",
-      "No. Meja: A-02",
-      "Waktu: 29/10/2026 10:00",
-      "2x Mie Goreng",
-      "Catatan: Tidak pedas",
-    ]);
+    expect(lines[0]).toMatchObject({ text: "DAPUR", type: "center" });
+    expect(lines.map(({ text }) => text)).toContain("No Nota    : ORD-001");
+    expect(lines.map(({ text }) => text)).toContain("Waktu      : 29/10/2026 10:00");
+    expect(lines.map(({ text }) => text)).toContain("No Urut    : 7");
+    expect(lines.map(({ text }) => text)).toContain("Order      : Siti");
+    expect(lines.map(({ text }) => text)).toContain("Nomor Meja : A-02");
+    expect(lines.map(({ text }) => text)).toContain("  Tidak pedas");
+    expect(lines[lines.length - 2]).toEqual({ type: "center", text: "29/10/2026 10:00" });
   });
 
-  it("builds a paid receipt with the required header, total status, and exact footer", () => {
+  it("builds payment profile, item, totals, and footer rows", () => {
     const lines = buildBluetoothReceiptLines("payment", {
-      transactionNo: "TRX-001",
+      id: "TRX-001",
+      time: "29/10/2026 10:00",
+      queueNumber: 9,
       cashier: "Siti",
-      items: [{ qty: 2, name: "Kopi Susu" }],
+      customerName: "Budi",
+      tableName: "A-02",
+      items: [{ qty: 2, name: "Kopi Susu", price: 12500 }],
+      subtotal: 25000,
       total: 25000,
+      cashGiven: 30000,
+      change: 5000,
+      profile: {
+        nama_usaha: "Warkop Babba",
+        alamat: "Jl. Contoh yang sangat panjang untuk diuji",
+        kota: "Makassar",
+        telepon: "08123456789",
+      },
     });
     const text = lines.map(({ text }) => text);
 
-    expect(text[0]).toBe("WARKOP BABBA");
-    expect(text).toContain("No. Transaksi: TRX-001");
-    expect(text).toContain("Kasir: Siti");
-    expect(text).toContain("Total: Rp 25.000 (LUNAS)");
-    expect(text[text.length - 1]).toBe(RECEIPT_FOOTER);
+    expect(lines[0]).toMatchObject({ type: "center", text: "Warkop Babba", bold: true });
+    expect(text.some((line) => line.includes("Jl. Contoh yang sangat panjang"))).toBe(true);
+    expect(text).toContain("No Nota    : TRX-001");
+    expect(text).toContain("Order      : Siti");
+    expect(text).toContain("Customer   : Budi");
+    expect(text).toContain("Nomor Meja : A-02");
+    expect(text.some((line) => line.startsWith("2 Kopi Susu"))).toBe(true);
+    expect(text.some((line) => line.includes("Subtotal 2 Produk"))).toBe(true);
+    expect(text.some((line) => line.includes("Rp 25.000"))).toBe(true);
+    expect(text).toContain("TERIMA KASIH");
+    expect(text).toContain("instagram:warkopbabba_mks");
+    expect(text[text.length - 1]).toBe("dicetak: Siti");
   });
 
-  it("includes alignment, initialization, and auto-cut ESC/POS commands", () => {
-    const bytes = buildEscPosReceipt("kitchen", { items: [] });
+  it("wraps centered text and formats left-right rows to 32 characters", () => {
+    expect(wordWrapCenter("Alamat usaha dengan teks yang cukup panjang")).toEqual([
+      "Alamat usaha dengan teks yang",
+      "cukup panjang",
+    ]);
+    expect(formatLine("2 Kopi Susu", "Rp 25.000")).toHaveLength(32);
+  });
+
+  it("includes alignment, initialization, and auto-cut ESC/POS commands", async () => {
+    const bytes = await buildEscPosReceipt("kitchen", { items: [] });
 
     expect(Array.from(bytes.slice(0, 5))).toEqual([0x1b, 0x40, 0x1b, 0x61, 0x01]);
     expect(Array.from(bytes.slice(-6))).toEqual([0x0a, 0x0a, 0x0a, 0x1d, 0x56, 0x00]);
@@ -64,11 +97,69 @@ describe("Bluetooth ESC/POS receipts", () => {
     const text = lines.map(({ text }) => text);
 
     expect(text).toContain("OPEN BILL");
-    expect(text).toContain("No. Bill: BILL-001");
-    expect(text).toContain("2x Kopi Susu");
-    expect(text).toContain("Total Tagihan: Rp 24.000");
+    expect(text).toContain("No Bill    : BILL-001");
+    expect(text.some((line) => line.startsWith("2 Kopi Susu"))).toBe(true);
+    expect(text.some((line) => line.includes("Rp 24.000"))).toBe(true);
     expect(text).toContain("Belum lunas");
     expect(text.some((line) => line.includes("LUNAS"))).toBe(false);
+  });
+
+  it("skips a logo when image loading fails", async () => {
+    const originalImage = global.Image;
+    global.Image = class {
+      set src(_value) {
+        this.onerror();
+      }
+    };
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    await expect(convertImageToESCPOS("https://example.test/logo.png")).resolves.toEqual(new Uint8Array());
+    global.Image = originalImage;
+    warn.mockRestore();
+  });
+
+  it("converts a monochrome canvas image to a GS v 0 raster command", async () => {
+    const originalImage = global.Image;
+    const originalCreateElement = document.createElement.bind(document);
+    const pixels = new Uint8ClampedArray([
+      0, 0, 0, 255,
+      255, 255, 255, 255,
+      255, 255, 255, 255,
+      255, 255, 255, 255,
+      255, 255, 255, 255,
+      255, 255, 255, 255,
+      255, 255, 255, 255,
+      255, 255, 255, 255,
+    ]);
+    const context = {
+      fillRect: jest.fn(),
+      drawImage: jest.fn(),
+      getImageData: jest.fn(() => ({ data: pixels })),
+    };
+    const canvas = {
+      getContext: jest.fn(() => context),
+      width: 0,
+      height: 0,
+    };
+
+    global.Image = class {
+      naturalWidth = 8;
+      naturalHeight = 1;
+      set src(_value) {
+        this.onload();
+      }
+    };
+    const createElement = jest.spyOn(document, "createElement").mockImplementation((tagName) => (
+      tagName === "canvas" ? canvas : originalCreateElement(tagName)
+    ));
+
+    try {
+      const bytes = await convertImageToESCPOS("https://example.test/logo.png");
+      expect(Array.from(bytes)).toEqual([0x1d, 0x76, 0x30, 0, 1, 0, 1, 0, 0x80]);
+      expect(context.drawImage).toHaveBeenCalled();
+    } finally {
+      global.Image = originalImage;
+      createElement.mockRestore();
+    }
   });
 
   it("reuses the Bluetooth device and reconnects without another pairing prompt", async () => {

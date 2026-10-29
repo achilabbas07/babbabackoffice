@@ -50,6 +50,7 @@ const ThermalBusinessHeader = ({ testid }) => {
 };
 
 export const ReceiptDialog = ({ trx, onClose }) => {
+  const { profile } = useProfile();
   const [, setPrintRevision] = useState(0);
   const [printing, setPrinting] = useState(false);
   const printKey = printCountKey("receipt", trx?.id);
@@ -67,12 +68,28 @@ export const ReceiptDialog = ({ trx, onClose }) => {
     try {
       await printBluetoothReceipt("payment", {
         id: trx.id,
+        time: fmtDate(trx.date),
+        queueNumber: trx.queueNumber,
         cashier: trx.userName || trx.userId || "-",
+        customerName: trx.customerName,
+        tableName: trx.tableName,
         items: (trx.items_json || []).map((item) => ({
           ...item,
           name: itemName(item),
         })),
+        subtotal: trx.subtotal,
         total: trx.total,
+        cashGiven: trx.cashGiven,
+        totalPaid: trx.totalPaid,
+        change: trx.change,
+        platform: trx.platform,
+        profile: {
+          nama_usaha: profile.app_name,
+          alamat: profile.address,
+          kota: profile.city,
+          telepon: profile.phone,
+          logo_url: profile.logo_url,
+        },
       });
       const count = incrementPrintCount(printKey);
       flushSync(() => setPrintRevision(count));
