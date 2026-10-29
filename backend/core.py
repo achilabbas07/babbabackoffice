@@ -165,6 +165,12 @@ class Transaction(BaseDocument):
     pointsDiscount: float = 0
     queueNumber: Optional[int] = None
 
+    def to_mongo(self) -> dict:
+        data = super().to_mongo()
+        if data["queueNumber"] is not None:
+            data["queueNumber"] = str(data["queueNumber"])
+        return data
+
 
 class Purchase(BaseDocument):
     date: str
