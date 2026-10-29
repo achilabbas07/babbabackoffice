@@ -70,10 +70,11 @@ export default function POS() {
   }, [loadRefs]);
 
   useEffect(() => {
+    const controller = new AbortController();
     const billId = params.get("bill");
     const tableId = params.get("table");
     if (billId) {
-      api.get(`/open-bills/${billId}`).then(({ data }) => {
+      api.get(`/open-bills/${billId}`, { signal: controller.signal }).then(({ data }) => {
         const billItems = data.items_json.map((i) => {
           const id = i.id || createItemId();
           return { key: cartItemKey({ ...i, id }), id, is_printed: Boolean(i.is_printed), productId: i.productId, variantId: i.variantId ?? null, extra: i.variantPrice || 0, variantName: i.variantName || "", name: itemName(i), price: i.price, qty: i.qty, notes: i.notes || "" };
@@ -82,21 +83,24 @@ export default function POS() {
         setCart(billItems);
         setSaved(Object.fromEntries(billItems.map((i) => [i.key, i.qty])));
         setAuthPin(null);
-      }).catch((e) => toast.error(errMsg(e)));
+      }).catch((e) => {
+        if (!controller.signal.aborted) toast.error(errMsg(e));
+      });
     } else if (tableId) {
       setOrder((o) => ({ ...o, type: "Dine In", tableId }));
     }
+    return () => controller.abort();
   }, [params]);
 
-  const addLine = (p, v) => {
+  const addLine = useCallback((p, v) => {
     const key = `${p.id}:${v ? v.id : ""}`;
     const id = createItemId();
     setCart((c) => (c.some((i) => itemKey(i) === key && !i.is_printed)
       ? c.map((i) => (itemKey(i) === key && !i.is_printed ? { ...i, qty: i.qty + 1 } : i))
       : [...c, { key: `${key}:${id}`, id, is_printed: false, productId: p.id, variantId: v ? v.id : null, extra: v ? Number(v.additional_price || 0) : 0, variantName: v ? v.variant_name : "", name: v ? v.variant_name : p.name, price: p.price, qty: 1, notes: "" }]));
-  };
+  }, []);
   const variantsOf = (p) => variants.filter((v) => v.pid === p.id);
-  const add = async (p) => {
+  const add = useCallback(async (p) => {
     try {
       const { data } = await api.get("/menu-variants", { params: { product_id: p.id } });
       setVariants((vs) => [...vs.filter((v) => v.pid !== p.id), ...data.map((v) => ({ ...v, pid: p.id }))]);
@@ -105,7 +109,7 @@ export default function POS() {
     } catch (e) {
       toast.error(errMsg(e));
     }
-  };
+  }, [addLine]);
 
   const reset = () => {
     setOrder(emptyOrder(user));

@@ -59,11 +59,17 @@ export const TableDetailDialog = ({ table, tables, onClose, onChanged, onPaid })
   const billId = table?.orderData?.openBillId;
 
   useEffect(() => {
+    const controller = new AbortController();
     setBill(null);
     if (table?.status === "occupied" && billId) {
-      api.get(`/open-bills/${billId}`).then((r) => setBill(r.data)).catch((e) => toast.error(errMsg(e)));
+      api.get(`/open-bills/${billId}`, { signal: controller.signal })
+        .then((r) => setBill(r.data))
+        .catch((e) => {
+          if (!controller.signal.aborted) toast.error(errMsg(e));
+        });
     }
-  }, [table, billId]);
+    return () => controller.abort();
+  }, [table?.id, table?.status, billId]);
 
   const run = async (fn, msg) => {
     try {

@@ -27,9 +27,13 @@ export default function Tables() {
   const [detailId, setDetailId] = useState(null);
   const [receipt, setReceipt] = useState(null);
 
-  const load = useCallback(() => api.get("/tables").then((r) => setTables(r.data)).catch((e) => toast.error(errMsg(e))), []);
+  const load = useCallback((signal) => api.get("/tables", { signal }).then((r) => setTables(r.data)).catch((e) => {
+    if (e.name !== "CanceledError") toast.error(errMsg(e));
+  }), []);
   useEffect(() => {
-    load();
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
   }, [load]);
   useEffect(() => {
     if (!editing) setPositions(autoLayout(tables));
@@ -60,10 +64,16 @@ export default function Tables() {
     load();
   };
 
-  const onTileClick = (t) => {
+  const onTileClick = useCallback((t) => {
     if (editing) return setForm(t);
     if (t.kind !== "fixture") setDetailId(t.id);
-  };
+  }, [editing]);
+
+  const deleteTable = useCallback(async (table) => {
+    await api.delete(`/tables/${table.id}`);
+    toast.success(`${table.name} dihapus`);
+    load();
+  }, [load]);
 
   return (
     <div>
@@ -101,7 +111,7 @@ export default function Tables() {
       </div>
 
       <FloorCanvas tables={shown} positions={positions} setPositions={setPositions} editing={editing} onTileClick={onTileClick}
-        onDelete={async (t) => { await api.delete(`/tables/${t.id}`); toast.success(`${t.name} dihapus`); load(); }} />
+        onDelete={deleteTable} />
 
       <FormDialog open={!!form} onOpenChange={(o) => !o && setForm(null)} title={form?.id ? `Edit ${form.name}` : "Tambah Meja / Objek"} fields={FIELDS} initial={form} onSubmit={saveForm} testid="table-form" />
       <TableDetailDialog table={detail} tables={tables} onClose={() => setDetailId(null)} onChanged={load}
