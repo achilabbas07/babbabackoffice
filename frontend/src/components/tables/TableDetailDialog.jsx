@@ -11,6 +11,7 @@ import { SplitBillDialog } from "@/components/tables/SplitBillDialog";
 import { PickTableDialog } from "@/components/tables/PickTableDialog";
 import { AdminPinDialog } from "@/components/tables/AdminPinDialog";
 import { PrintTicketDialog } from "@/components/tables/PrintTicketDialog";
+import { groupOrderItemsForDisplay } from "@/lib/openBillDisplay";
 
 const Action = ({ icon: Icon, label, onClick, testid, tone = "", lock }) => (
   <button
@@ -34,9 +35,9 @@ const BillSummary = ({ bill }) => (
       <span>{bill.customerName || "Pelanggan umum"}</span>
     </div>
     <div data-testid="table-detail-items" className="max-h-56 space-y-1.5 overflow-y-auto px-4 py-3 text-sm">
-      {bill.items_json.map((i) => (
-        <div key={itemKey(i)} className="flex justify-between gap-3">
-          <span>{i.qty}× {itemName(i)}{i.notes && <span className="text-xs text-muted-foreground"> · {i.notes}</span>}</span>
+      {groupOrderItemsForDisplay(bill.items_json).map((i) => (
+        <div key={`${itemKey(i)}:${i.notes || ""}`} className="flex justify-between gap-3">
+          <span>{i.qty}× {i.displayName || itemName(i)}{i.notes && <span className="text-xs text-muted-foreground"> · {i.notes}</span>}</span>
           <span className="font-mono">{rp(i.subtotal)}</span>
         </div>
       ))}
