@@ -4,7 +4,7 @@ import { Delete, Lock, ArrowLeft, UserRound, LogOut } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useProfile } from "@/context/ProfileContext";
 import { BrandLogo } from "@/components/BrandLogo";
-import { api, errMsg, ROLE_LABEL } from "@/lib/api";
+import { api, backendConfigError, errMsg, ROLE_LABEL } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "clear", "0", "back"];
@@ -168,8 +168,8 @@ export default function Login() {
     }
     setUsersLoading(true);
     setSelected(null);
-    if (!process.env.REACT_APP_BACKEND_URL?.trim()) {
-      setUsersError("Backend belum dikonfigurasi. Atur REACT_APP_BACKEND_URL di Vercel, lalu deploy ulang.");
+    if (backendConfigError) {
+      setUsersError(backendConfigError);
       setUsersLoading(false);
       return undefined;
     }

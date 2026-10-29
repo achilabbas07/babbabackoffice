@@ -1,8 +1,16 @@
 import axios from "axios";
 
-export const api = axios.create({ baseURL: `${process.env.REACT_APP_BACKEND_URL}/api` });
+const backendUrl = process.env.REACT_APP_BACKEND_URL?.trim().replace(/\/+$/, "");
+export const backendConfigError = backendUrl
+  ? ""
+  : "Backend belum dikonfigurasi. Isi REACT_APP_BACKEND_URL di frontend/.env atau environment hosting, lalu jalankan ulang aplikasi.";
+
+export const api = axios.create({
+  baseURL: backendUrl ? `${backendUrl}/api` : "",
+});
 
 api.interceptors.request.use((cfg) => {
+  if (backendConfigError) return Promise.reject(new Error(backendConfigError));
   const token = localStorage.getItem("pos_token");
   if (token) cfg.headers.Authorization = `Bearer ${token}`;
   return cfg;
