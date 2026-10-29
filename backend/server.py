@@ -545,7 +545,7 @@ async def compose_bill(body: OpenBillIn, user: User, bill_id: str, timestamp: st
     wid, wname = await resolve_waiter(body.waiterId, body.waiterName, user)
     return OpenBill(
         id=bill_id, timestamp=timestamp, type=body.type, total=total, items_json=items,
-        queueNumber=body.queueNumber,
+        queueNumber=str(body.queueNumber) if body.queueNumber is not None else None,
         customerName=body.customerName or (cust["name"] if cust else ""), customerId=body.customerId,
         tableId=body.tableId if body.type == "Dine In" else None, userId=user.id, userName=user.name,
         waiterName=wname, waiterId=wid,
@@ -818,15 +818,20 @@ async def create_transaction(body: TransactionIn, request: Request, user: User =
     else:
         wid, wname = None, body.waiterName
 
+    queue_number = body.queueNumber
+    if queue_number is None and bill:
+        queue_number = bill.queueNumber
+    transaction_time = now_iso()
     trx = Transaction(
-        id=await next_id(f"TRX-{datetime.now(timezone.utc):%Y%m%d}", 4), date=now_iso(), type=body.type,
+        id=await next_id(f"TRX-{datetime.now(timezone.utc):%Y%m%d}", 4), date=transaction_time,
+        orderTime=bill.timestamp if bill else transaction_time, type=body.type,
         method=body.method, tableId=table_id, customerId=customer_id, total=total, items_json=items,
         userId=user.id, userName=user.name, cashGiven=cash, change=cash - total, shiftId=shift["_id"] if shift else None,
         waiterName=wname, waiterId=wid, subtotal=subtotal, discount=subtotal - total, promoCode=promo["code"],
         promoDiscount=promo["discount"], pointsRedeemed=pts["pointsRequired"], pointsDiscount=pts["discount"],
         tableName=table["name"] if table else "",
         customerName=customer["name"] if customer else (body.customerName or (bill.customerName if bill else "")),
-        queueNumber=body.queueNumber if body.queueNumber is not None else (bill.queueNumber if bill else None),
+        queueNumber=str(queue_number) if queue_number is not None else None,
     )
     try:
         await db.connect()

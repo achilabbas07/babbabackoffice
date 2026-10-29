@@ -14,20 +14,21 @@ describe("Bluetooth ESC/POS receipts", () => {
     const lines = buildBluetoothReceiptLines("kitchen", {
       id: "ORD-001",
       tableName: "A-02",
+      orderTime: "29/10/2026 09:55",
       time: "29/10/2026 10:00",
-      queueNumber: 7,
+      queueNumber: "7",
       waiter: "Siti",
       items: [{ qty: 2, name: "Mie Goreng", note: "Tidak pedas" }],
     });
 
     expect(lines[0]).toMatchObject({ text: "DAPUR", type: "center" });
     expect(lines.map(({ text }) => text)).toContain("No Nota    : ORD-001");
-    expect(lines.map(({ text }) => text)).toContain("Waktu      : 29/10/2026 10:00");
+    expect(lines.map(({ text }) => text)).toContain("Waktu      : 29/10/2026 09:55");
     expect(lines.map(({ text }) => text)).toContain("No Urut    : 7");
     expect(lines.map(({ text }) => text)).toContain("Order      : Siti");
     expect(lines.map(({ text }) => text)).toContain("Nomor Meja : A-02");
     expect(lines.map(({ text }) => text)).toContain("  Tidak pedas");
-    expect(lines[lines.length - 2]).toEqual({ type: "center", text: "29/10/2026 10:00" });
+    expect(lines[lines.length - 2]).toEqual({ type: "center", text: "29/10/2026 09:55" });
   });
 
   it("uses the addon header and places duplicate markers below receipt headers", () => {
@@ -53,8 +54,10 @@ describe("Bluetooth ESC/POS receipts", () => {
   it("builds payment profile, item, totals, and footer rows", () => {
     const lines = buildBluetoothReceiptLines("payment", {
       id: "TRX-001",
-      time: "29/10/2026 10:00",
-      queueNumber: 9,
+      orderTime: "29/10/2026 09:55",
+      paidAt: "29/10/2026 10:00",
+      paymentMethod: "Cash",
+      queueNumber: "9",
       cashier: "Siti",
       customerName: "Budi",
       tableName: "A-02",
@@ -75,15 +78,32 @@ describe("Bluetooth ESC/POS receipts", () => {
     expect(lines[0]).toMatchObject({ type: "center", text: "Warkop Babba", bold: true });
     expect(text.some((line) => line.includes("Jl. Contoh yang sangat panjang"))).toBe(true);
     expect(text).toContain("No Nota    : TRX-001");
+    expect(text).toContain("Waktu      : 29/10/2026 09:55");
+    expect(text).toContain("No Urut    : 9");
+    expect(text.some((line) => line.includes("Metode Cash"))).toBe(true);
+    expect(text.some((line) => line.includes("Terbayar  29/10/2026 10:00"))).toBe(true);
+    expect(text.some((line) => line.startsWith("Kembalian") && line.includes("Rp 5.000"))).toBe(true);
     expect(text).toContain("Order      : Siti");
     expect(text).toContain("Customer   : Budi");
     expect(text).toContain("Nomor Meja : A-02");
     expect(text.some((line) => line.startsWith("2 Kopi Susu"))).toBe(true);
     expect(text.some((line) => line.includes("Subtotal 2 Produk"))).toBe(true);
     expect(text.some((line) => line.includes("Rp 25.000"))).toBe(true);
-    expect(text).toContain("TERIMA KASIH");
+    expect(text).toContain("Terima Kasih Atas Kunjungan Anda");
     expect(text).toContain("instagram:warkopbabba_mks");
     expect(text[text.length - 1]).toBe("dicetak: Siti");
+  });
+
+  it("prints dynamic payment method without a change row for QRIS", () => {
+    const lines = buildBluetoothReceiptLines("payment", {
+      paymentMethod: "QRIS",
+      cashGiven: 25000,
+      change: 0,
+      items: [],
+    }).map(({ text }) => text);
+
+    expect(lines.some((line) => line.includes("Metode QRIS"))).toBe(true);
+    expect(lines.some((line) => line.includes("Kembalian"))).toBe(false);
   });
 
   it("wraps centered text and formats left-right rows to 32 characters", () => {

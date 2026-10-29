@@ -84,6 +84,9 @@ function itemTotal(item) {
 function paymentLines(data) {
   const items = data.items || data.items_json || [];
   const profile = data.profile || {};
+  const paymentMethod = data.paymentMethod || data.method || "-";
+  const isCash = paymentMethod === "Cash" || paymentMethod === "Tunai";
+  const orderTime = data.orderTime || data.createdAt || data.time || data.date;
   const lines = [
     ...(profile.nama_usaha
       ? [{ type: "center", text: profile.nama_usaha, bold: true }]
@@ -96,8 +99,8 @@ function paymentLines(data) {
       : []),
     { type: "text", text: "================================" },
     { type: "text", text: fieldLine("No Nota", data.id || data.transactionNo || data.transactionId) },
-    { type: "text", text: fieldLine("Waktu", data.time || data.dateTime || data.date) },
-    { type: "text", text: fieldLine("No Urut", data.queueNumber) },
+    { type: "text", text: fieldLine("Waktu", orderTime) },
+    { type: "text", text: fieldLine("No Urut", data.queueNumber == null ? "-" : String(data.queueNumber)) },
     { type: "text", text: fieldLine("Order", data.cashier || data.cashierName || data.userName) },
     { type: "text", text: fieldLine("Customer", data.customerName) },
     { type: "text", text: fieldLine("Nomor Meja", data.tableName || data.table) },
@@ -123,16 +126,18 @@ function paymentLines(data) {
     { type: "text", text: formatLine(`Subtotal ${itemCount} Produk`, formatCurrency(subtotal)) },
     { type: "text", text: formatLine("Total", formatCurrency(total)), bold: true },
     { type: "text", text: "--------------------------------" },
-    { type: "text", text: formatLine("Tunai", formatCurrency(cash)) },
+    { type: "text", text: formatLine(`Metode ${paymentMethod}`, formatCurrency(cash)) },
     { type: "text", text: formatLine("Total Bayar", formatCurrency(paid)) },
-    { type: "text", text: formatLine("Kembalian", formatCurrency(data.change ?? 0)) },
+    ...(isCash
+      ? [{ type: "text", text: formatLine("Kembalian", formatCurrency(data.change ?? 0)) }]
+      : []),
     { type: "text", text: "================================" },
     { type: "center", text: data.platform || "Shopee food : Warkop Babba -" },
     { type: "center", text: "Bontoala" },
-    { type: "center", text: "TERIMA KASIH" },
+    { type: "center", text: RECEIPT_FOOTER },
     { type: "center", text: "instagram:warkopbabba_mks" },
     { type: "blank", text: "" },
-    { type: "center", text: `Terbayar  ${data.time || data.dateTime || data.date || "-"}` },
+    { type: "center", text: `Terbayar  ${data.paidAt || data.paymentTime || data.time || data.dateTime || data.date || "-"}` },
     { type: "center", text: `dicetak: ${data.cashier || data.cashierName || data.userName || "-"}` },
   );
   return lines;
@@ -140,6 +145,7 @@ function paymentLines(data) {
 
 function kitchenLines(data) {
   const items = data.items || data.items_json || [];
+  const orderTime = data.orderTime || data.createdAt || data.time || data.date;
   const lines = [
     { type: "center", text: data.isAddOn === true ? "TAMBAHAN ORDER" : "DAPUR" },
     ...(data.isDuplicate === true
@@ -147,8 +153,8 @@ function kitchenLines(data) {
       : []),
     { type: "blank", text: "" },
     { type: "text", text: fieldLine("No Nota", data.id || data.transactionNo) },
-    { type: "text", text: fieldLine("Waktu", data.time || data.dateTime || data.date) },
-    { type: "text", text: fieldLine("No Urut", data.queueNumber) },
+    { type: "text", text: fieldLine("Waktu", orderTime) },
+    { type: "text", text: fieldLine("No Urut", data.queueNumber == null ? "-" : String(data.queueNumber)) },
     { type: "text", text: fieldLine("Order", data.waiter) },
     { type: "text", text: fieldLine("Nomor Meja", data.tableName || data.table) },
     { type: "text", text: "--------------------------------" },
@@ -166,7 +172,7 @@ function kitchenLines(data) {
 
   lines.push(
     { type: "text", text: "================================" },
-    { type: "center", text: data.time || data.dateTime || data.date || "-" },
+    { type: "center", text: orderTime || "-" },
     { type: "center", text: `dicetak: ${data.waiter || "-"}` },
   );
   return lines;
@@ -358,13 +364,7 @@ export async function printBluetoothReceipt(
     throw new Error("Web Bluetooth tidak tersedia. Gunakan Chrome atau Edge melalui HTTPS.");
   }
 
-  let device = selectedDevice || cachedDevice;
-  if (!device) {
-    device = await bluetooth.requestDevice({
-      acceptAllDevices: true,
-      optionalServices: [serviceUuid],
-    });
-  }
+  const device = selectedDevice || await selectBluetoothPrinter(serviceUuid);
   if (!device?.gatt) throw new Error("Perangkat yang dipilih tidak menyediakan koneksi GATT.");
   cachedDevice = device;
 
@@ -373,4 +373,18 @@ export async function printBluetoothReceipt(
   const service = await server.getPrimaryService(serviceUuid);
   const characteristic = await findWritableCharacteristic(service, characteristicUuid);
   await writeReceipt(characteristic, bytes);
+}
+
+export async function selectBluetoothPrinter(serviceUuid = RPP02_SERVICE_UUID) {
+  const bluetooth = globalThis.navigator?.bluetooth;
+  if (!bluetooth?.requestDevice) {
+    throw new Error("Web Bluetooth tidak tersedia. Gunakan Chrome atau Edge melalui HTTPS.");
+  }
+  if (cachedDevice) return cachedDevice;
+
+  cachedDevice = await bluetooth.requestDevice({
+    acceptAllDevices: true,
+    optionalServices: [serviceUuid],
+  });
+  return cachedDevice;
 }

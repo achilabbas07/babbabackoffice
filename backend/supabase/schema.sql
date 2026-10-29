@@ -80,7 +80,8 @@ create table if not exists open_bills (
   "waiterName"    text not null default '',
   "waiterId"      text references users(id) on delete set null,
   "tableId"       text references tables(id) on delete set null,
-  "customerId"    text references customers(id) on delete set null
+  "customerId"    text references customers(id) on delete set null,
+  "queueNumber"   text
 );
 create index if not exists open_bills_table_idx on open_bills("tableId");
 do $$
@@ -102,6 +103,7 @@ $$;
 create table if not exists transactions (
   id            text primary key,
   date          timestamptz not null default now(),
+  "orderTime"   timestamptz,
   type          text not null check (type in ('Dine In','Takeaway','Walk In','Ojek Online')),
   method        text not null check (method in ('Cash','QRIS','Card','Debit')),
   "tableId"     text references tables(id) on delete set null,
@@ -116,7 +118,8 @@ create table if not exists transactions (
   change        integer not null default 0,
   "waiterName"  text not null default '',
   "waiterId"    text references users(id) on delete set null,
-  "shiftId"     text
+  "shiftId"     text,
+  "queueNumber" text
 );
 create index if not exists transactions_date_idx on transactions(date);
 create index if not exists transactions_customer_idx on transactions("customerId");

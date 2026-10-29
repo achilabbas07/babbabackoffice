@@ -55,10 +55,12 @@ export const ReceiptDialog = ({ trx, onClose }) => {
   const [printing, setPrinting] = useState(false);
   const printKey = printCountKey("receipt", trx?.id);
   const printCount = readPrintCount(printKey);
+  const dateText = trx ? fmtDate(trx.orderTime || trx.createdAt || trx.date) : "";
   const lines = trx ? buildPaidReceiptLines({
     trx,
     printCount,
-    dateText: fmtDate(trx.date),
+    dateText,
+    paidAtText: fmtDate(trx.paidAt || trx.date),
     currency: rp,
     itemName,
   }) : [];
@@ -69,8 +71,11 @@ export const ReceiptDialog = ({ trx, onClose }) => {
       await printBluetoothReceipt("payment", {
         id: trx.id,
         isDuplicate: printCount > 0 || Number(trx.print_count) > 0,
-        time: fmtDate(trx.date),
-        queueNumber: trx.queueNumber,
+        time: dateText,
+        orderTime: dateText,
+        paidAt: fmtDate(trx.paidAt || trx.date),
+        paymentMethod: trx.method,
+        queueNumber: trx.queueNumber == null ? null : String(trx.queueNumber),
         cashier: trx.userName || trx.userId || "-",
         customerName: trx.customerName,
         tableName: trx.tableName,

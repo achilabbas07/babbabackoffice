@@ -26,8 +26,12 @@ export const PrintTicketDialog = ({ bill, tableName, mode, onClose }) => {
   const printKey = printCountKey(kitchen ? "kitchen" : "bill", bill?.id);
   const printCount = readPrintCount(printKey);
   const dateText = fmtDate(bill?.timestamp || new Date().toISOString());
+  const kitchenBill = bill ? {
+    ...bill,
+    items_json: (bill.items_json || []).filter((item) => !item.is_printed),
+  } : null;
   const lines = bill ? (kitchen
-    ? buildKitchenTicketLines({ bill, tableName, printCount, dateText, itemName })
+    ? buildKitchenTicketLines({ bill: kitchenBill, tableName, dateText, itemName })
     : buildOpenBillLines({ bill, tableName, printCount, dateText, currency: rp, itemName })) : [];
   const profileLines = [
     ...wrapPrintText(profile.app_name || "Kedai POS"),
@@ -39,37 +43,49 @@ export const PrintTicketDialog = ({ bill, tableName, mode, onClose }) => {
     setPrintedItemIds(new Set());
   }, [bill?.id]);
 
-  const handlePrint = async () => {
+  const handlePrint = async (reprint = false) => {
     setPrinting(true);
     try {
       if (kitchen) {
         const unprintedItems = (bill.items_json || []).filter(
           (item) => !item.is_printed && !printedItemIds.has(item.id),
         );
-        if (!unprintedItems.length) {
-          toast.info("Semua item bill ini sudah pernah dicetak ke dapur.");
+        const printedItems = (bill.items_json || []).filter(
+          (item) => item.is_printed || printedItemIds.has(item.id),
+        );
+        const itemsToPrint = reprint ? printedItems : unprintedItems;
+        if (!itemsToPrint.length) {
+          toast.info(reprint
+            ? "Belum ada item tercetak untuk dicetak ulang."
+            : "Semua item bill ini sudah pernah dicetak ke dapur.");
           return;
         }
-        const itemIds = unprintedItems.map((item) => item.id);
-        if (itemIds.some((id) => typeof id !== "string" || !id)) {
+        const itemIds = itemsToPrint.map((item) => item.id);
+        if (!reprint && itemIds.some((id) => typeof id !== "string" || !id)) {
           throw new Error("ID item belum tersedia. Simpan ulang bill sebelum mencetak pesanan dapur.");
         }
-        if (!supabase) {
+        if (!reprint && !supabase) {
           throw new Error("Supabase belum dikonfigurasi untuk menyimpan status cetak dapur.");
         }
         await printBluetoothReceipt("kitchen", {
           id: bill.id,
-          isDuplicate: printCount > 0 || Number(bill.print_count) > 0,
+          isAddOn: (bill.items_json || []).some((item) => item.is_printed),
+          isDuplicate: reprint,
           tableName: tableName || bill.type || "-",
+          orderTime: dateText,
           time: dateText,
-          queueNumber: bill.queueNumber,
+          queueNumber: bill.queueNumber == null ? null : String(bill.queueNumber),
           waiter: bill.waiterName || bill.userName || "-",
-          items: unprintedItems.map((item) => ({
+          items: itemsToPrint.map((item) => ({
             ...item,
             name: itemName(item),
             note: item.notes || item.note,
           })),
         });
+        if (reprint) {
+          incrementPrintCount(printKey);
+          return;
+        }
         setPrintedItemIds((printedIds) => new Set([...printedIds, ...itemIds]));
         const count = incrementPrintCount(printKey);
         flushSync(() => setPrintRevision(count));
@@ -125,12 +141,23 @@ export const PrintTicketDialog = ({ bill, tableName, mode, onClose }) => {
             <button
               data-testid={`print-${mode}-button`}
               type="button"
-              onClick={handlePrint}
+              onClick={() => handlePrint()}
               disabled={printing}
               className="no-print flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary font-medium text-primary-foreground"
             >
               <Printer className="h-4 w-4" /> {printing ? "Mencetak..." : "Cetak"}
             </button>
+            {kitchen && (bill.items_json || []).some((item) => item.is_printed || printedItemIds.has(item.id)) && (
+              <button
+                data-testid="print-kitchen-reprint-button"
+                type="button"
+                onClick={() => handlePrint(true)}
+                disabled={printing}
+                className="no-print flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border font-medium"
+              >
+                <Printer className="h-4 w-4" /> Cetak Ulang Item Tercetak
+              </button>
+            )}
           </div>
         )}
       </DialogContent>

@@ -56,7 +56,7 @@ export function incrementPrintCount(key) {
 const append = (lines, value) => lines.push(...wrapPrintText(value));
 const addSeparator = (lines) => lines.push("-".repeat(PRINT_LINE_WIDTH));
 
-export function buildPaidReceiptLines({ trx, printCount, dateText, currency, itemName }) {
+export function buildPaidReceiptLines({ trx, printCount, dateText, paidAtText, currency, itemName }) {
   const lines = [];
   if (printCount >= 2) lines.push("DUPLIKAT");
   lines.push("STRUK PEMBAYARAN");
@@ -65,6 +65,7 @@ export function buildPaidReceiptLines({ trx, printCount, dateText, currency, ite
   append(lines, `Kasir: ${trx.userName || trx.userId || "-"}`);
   append(lines, `Pelayan: ${trx.waiterName || trx.userName || trx.userId || "-"}`);
   append(lines, `Tanggal: ${dateText}`);
+  append(lines, `No. Urut: ${trx.queueNumber == null ? "-" : String(trx.queueNumber)}`);
   if (trx.tableName) append(lines, `Meja: ${trx.tableName}`);
   if (trx.customerName) append(lines, `Pelanggan: ${trx.customerName}`);
   addSeparator(lines);
@@ -77,11 +78,15 @@ export function buildPaidReceiptLines({ trx, printCount, dateText, currency, ite
   if (trx.promoDiscount > 0) append(lines, `Promo: -${currency(trx.promoDiscount)}`);
   if (trx.pointsDiscount > 0) append(lines, `Poin: -${currency(trx.pointsDiscount)}`);
   append(lines, `Total: ${currency(trx.total)}`);
-  append(lines, `Bayar (${trx.method || "-"}): ${currency(trx.cashGiven)}`);
-  append(lines, `Kembalian: ${currency(trx.change)}`);
+  append(lines, `Metode: ${trx.method || "-"}`);
+  append(lines, `Bayar: ${currency(trx.cashGiven)}`);
+  if (trx.method === "Cash" || trx.method === "Tunai") {
+    append(lines, `Kembalian: ${currency(trx.change)}`);
+  }
   append(lines, "Status: LUNAS");
   if (trx.tableName) append(lines, "Status Meja: LUNAS");
   addSeparator(lines);
+  if (paidAtText) append(lines, `Waktu bayar: ${paidAtText}`);
   append(lines, "Terima Kasih Atas Kunjungan Anda");
   return lines;
 }
@@ -94,6 +99,7 @@ export function buildOpenBillLines({ bill, tableName, printCount, dateText, curr
   append(lines, `No. Bill: ${bill.id}`);
   append(lines, `Meja: ${tableName || bill.type || "-"}`);
   append(lines, `Waktu: ${dateText}`);
+  append(lines, `No. Urut: ${bill.queueNumber == null ? "-" : String(bill.queueNumber)}`);
   append(lines, `Pelayan: ${bill.waiterName || bill.userName || "-"}`);
   if (bill.customerName) append(lines, `Pelanggan: ${bill.customerName}`);
   addSeparator(lines);
@@ -107,13 +113,14 @@ export function buildOpenBillLines({ bill, tableName, printCount, dateText, curr
   return lines;
 }
 
-export function buildKitchenTicketLines({ bill, tableName, printCount, dateText, itemName }) {
+export function buildKitchenTicketLines({ bill, tableName, isDuplicate = false, dateText, itemName }) {
   const lines = [];
-  if (printCount >= 2) lines.push("DUPLIKAT");
+  if (isDuplicate) lines.push("DUPLIKAT");
   lines.push("ORDER DAPUR");
   addSeparator(lines);
   append(lines, `Meja: ${tableName || bill.type || "-"}`);
   append(lines, `Waktu: ${dateText}`);
+  append(lines, `No. Urut: ${bill.queueNumber == null ? "-" : String(bill.queueNumber)}`);
   append(lines, `Pelayan: ${bill.waiterName || bill.userName || "-"}`);
   append(lines, `No. Order: ${bill.id}`);
   addSeparator(lines);

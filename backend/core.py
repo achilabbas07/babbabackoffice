@@ -142,6 +142,7 @@ class Recipe(BaseModel):
 
 class Transaction(BaseDocument):
     date: str
+    orderTime: Optional[str] = None
     type: str
     method: str
     tableId: Optional[str] = None
@@ -163,7 +164,7 @@ class Transaction(BaseDocument):
     promoDiscount: float = 0
     pointsRedeemed: int = 0
     pointsDiscount: float = 0
-    queueNumber: Optional[int] = None
+    queueNumber: Optional[str] = None
 
     def to_mongo(self) -> dict:
         data = super().to_mongo()
@@ -203,7 +204,7 @@ class OpenBill(BaseDocument):
     customerId: Optional[str] = None
     userName: str = ""
     waiterId: Optional[str] = None
-    queueNumber: Optional[int] = None
+    queueNumber: Optional[str] = None
 
     def to_mongo(self) -> dict:
         data = super().to_mongo()

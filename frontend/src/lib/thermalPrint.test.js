@@ -31,9 +31,10 @@ describe("thermal print templates", () => {
 
   it("adds a clear duplicate marker to subsequent paid receipts", () => {
     const lines = buildPaidReceiptLines({
-      trx: { ...bill, date: "2026-10-29", method: "Cash", cashGiven: 25000, change: 0 },
+      trx: { ...bill, date: "2026-10-29", method: "Cash", cashGiven: 25000, change: 0, queueNumber: "3" },
       printCount: 2,
       dateText: "29/10/2026",
+      paidAtText: "29/10/2026 10:05",
       currency,
       itemName,
     });
@@ -43,6 +44,24 @@ describe("thermal print templates", () => {
     expect(lines.every((line) => line.length <= PRINT_LINE_WIDTH)).toBe(true);
     expect(lines).toContain("Pelayan: Siti Pelayan");
     expect(lines).toContain("Status: LUNAS");
+    expect(lines).toContain("No. Urut: 3");
+    expect(lines).toContain("Kembalian: Rp0");
+    expect(lines).toContain("Waktu bayar: 29/10/2026 10:05");
+  });
+
+  it("omits change for non-cash payments while retaining the thank-you footer", () => {
+    const lines = buildPaidReceiptLines({
+      trx: { ...bill, method: "QRIS", cashGiven: 25000, change: 0, queueNumber: "4" },
+      printCount: 0,
+      dateText: "29/10/2026 10:00",
+      paidAtText: "29/10/2026 10:03",
+      currency,
+      itemName,
+    });
+
+    expect(lines.some((line) => line.startsWith("Metode: QRIS"))).toBe(true);
+    expect(lines.some((line) => line.startsWith("Kembalian:"))).toBe(false);
+    expect(lines[lines.length - 1]).toBe("Terima Kasih Atas Kunjungan Anda");
   });
 
   it("includes open-bill details and duplicate marking", () => {
@@ -60,18 +79,31 @@ describe("thermal print templates", () => {
     expect(lines.every((line) => line.length <= PRINT_LINE_WIDTH)).toBe(true);
   });
 
-  it("prints kitchen-only details without prices or business profile text", () => {
+  it("prints only kitchen details without adding a duplicate marker for repeat counts", () => {
     const lines = buildKitchenTicketLines({
       bill,
       tableName: "A-02",
-      printCount: 0,
+      printCount: 3,
       dateText: "29/10/2026 10:00",
       itemName,
     });
     expect(lines[0]).toBe("ORDER DAPUR");
+    expect(lines).not.toContain("DUPLIKAT");
     expect(lines).toContain("Pelayan: Siti Pelayan");
+    expect(lines).toContain("No. Urut: -");
     expect(lines.some((line) => line.includes("Rp"))).toBe(false);
     expect(lines.every((line) => line.length <= PRINT_LINE_WIDTH)).toBe(true);
+  });
+
+  it("marks a kitchen ticket as duplicate only when manual reprint is requested", () => {
+    const lines = buildKitchenTicketLines({
+      bill,
+      tableName: "A-02",
+      isDuplicate: true,
+      dateText: "29/10/2026 10:00",
+      itemName,
+    });
+    expect(lines[0]).toBe("DUPLIKAT");
   });
 });
 
