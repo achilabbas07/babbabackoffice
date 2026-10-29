@@ -24,20 +24,45 @@ const Clock = () => {
 };
 
 const FullscreenButton = () => {
-  const [isFull, setIsFull] = useState(!!document.fullscreenElement);
+  const [isFull, setIsFull] = useState(false);
   useEffect(() => {
-    const onChange = () => setIsFull(!!document.fullscreenElement);
+    const onChange = () => setIsFull(Boolean(
+      document.fullscreenElement || document.webkitFullscreenElement,
+    ));
     document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
+    document.addEventListener("webkitfullscreenchange", onChange);
+    onChange();
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      document.removeEventListener("webkitfullscreenchange", onChange);
+    };
   }, []);
-  const toggle = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {});
+  const toggle = async () => {
+    try {
+      const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+      if (fullscreenElement) {
+        const exitFullscreen = document.exitFullscreen || document.webkitExitFullscreen;
+        if (!exitFullscreen) throw new Error("Browser ini tidak mendukung keluar dari layar penuh.");
+        await exitFullscreen.call(document);
+        return;
+      }
+
+      const root = document.documentElement;
+      const requestFullscreen = root.requestFullscreen || root.webkitRequestFullscreen;
+      if (!requestFullscreen) throw new Error("Browser ini tidak mendukung mode layar penuh.");
+      await requestFullscreen.call(root);
+    } catch (error) {
+      toast.error(error?.message || "Mode layar penuh tidak dapat diaktifkan.");
+    }
+  };
   const Icon = isFull ? Minimize : Maximize;
   return (
     <button
       data-testid="fullscreen-toggle-button"
+      type="button"
       onClick={toggle}
       title={isFull ? "Keluar layar penuh" : "Layar penuh"}
-      className="grid h-10 w-10 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+      className="grid h-10 w-10 touch-manipulation place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary"
     >
       <Icon className="h-4 w-4" />
     </button>

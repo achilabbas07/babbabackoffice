@@ -1,16 +1,15 @@
-import { memo, useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Search, UtensilsCrossed } from "lucide-react";
 import { rp } from "@/lib/api";
 
-const ProductCard = memo(({ product, stock, ojol, onAdd, index }) => {
-  const handleClick = useCallback(() => onAdd(product), [onAdd, product]);
+const ProductCard = ({ product, stock, ojol, onAdd, index }) => {
   const price = ojol && product.price_ojol > 0 ? product.price_ojol : product.price;
 
   return (
     <button
       type="button"
       data-testid={`pos-product-${product.id}`}
-      onClick={handleClick}
+      onClick={() => onAdd(product)}
       style={{ animationDelay: `${index * 30}ms` }}
       className="fade-up group touch-manipulation overflow-hidden rounded-xl border border-border bg-card text-left shadow-sm transition-transform duration-200 hover:-translate-y-0.5 hover:border-primary/60 active:scale-[0.97]"
     >
@@ -34,7 +33,7 @@ const ProductCard = memo(({ product, stock, ojol, onAdd, index }) => {
       </div>
     </button>
   );
-});
+};
 
 export const ProductGrid = ({ products, stock = {}, onAdd, ojol }) => {
   const [cat, setCat] = useState("Semua");
@@ -44,8 +43,6 @@ export const ProductGrid = ({ products, stock = {}, onAdd, ojol }) => {
     () => products.filter((p) => (cat === "Semua" || p.category === cat) && p.name.toLowerCase().includes(q.toLowerCase())),
     [products, cat, q],
   );
-  const selectCategory = useCallback((category) => setCat(category), []);
-
   return (
     <div>
       <div className="mb-4 flex flex-col gap-2.5 lg:flex-row lg:items-center">
@@ -65,7 +62,7 @@ export const ProductGrid = ({ products, stock = {}, onAdd, ojol }) => {
               key={category}
               type="button"
               data-testid={`pos-category-${category.toLowerCase().replace(/\s+/g, "-")}`}
-              onClick={() => selectCategory(category)}
+              onClick={() => setCat(category)}
               className={`h-10 shrink-0 touch-manipulation rounded-xl px-3.5 text-sm font-medium transition-colors ${cat === category ? "bg-primary text-primary-foreground" : "border border-border bg-card text-muted-foreground hover:text-foreground"}`}
             >
               {category}
