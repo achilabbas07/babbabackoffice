@@ -27,6 +27,7 @@ import Journal from "@/pages/finance/Journal";
 import CashBankReport from "@/pages/finance/CashBankReport";
 import BalanceSheet from "@/pages/finance/BalanceSheet";
 import ProfitAndLoss from "@/pages/finance/ProfitAndLoss";
+import CashFlowStatement from "@/pages/finance/CashFlowStatement";
 import { toast } from "sonner";
 
 const PAGES = {
@@ -34,6 +35,7 @@ const PAGES = {
   "/products": Products, "/inventory": Inventory, "/purchases": Purchases, "/expenses": Expenses, "/reports": Reports,
   "/users": Users, "/schema": Schema, "/cash": Cash, "/shifts": Shifts, "/targets": Targets, "/profile": Profile,
   "/admin/jurnal": Journal, "/admin/laporan-kas": CashBankReport, "/admin/neraca": BalanceSheet, "/admin/laba-rugi": ProfitAndLoss,
+  "/admin/arus-kas": CashFlowStatement,
 };
 
 const Protected = ({ roles, deniedMessage, children }) => {

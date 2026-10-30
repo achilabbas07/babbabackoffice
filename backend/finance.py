@@ -3,7 +3,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Optional, Sequence
 from uuid import uuid4
 
-
+# Struktur data untuk baris jurnal umum
 JournalLine = tuple[str, str, Decimal, Decimal]
 
 
@@ -108,3 +108,46 @@ async def post_finance_source(
             for account_name, account_type, debit, credit in lines
         ],
     )
+
+
+async def get_laporan_arus_kas(
+    connection: Any,
+    start_date: date,
+    end_date: date
+) -> dict[str, Any]:
+    """
+    Menarik ringkasan Laporan Arus Kas langsung dari Supabase View
+    berdasarkan rentang tanggal yang ditentukan untuk konsumsi UI.
+    """
+    rows = await connection.fetch(
+        """
+        SELECT 
+            aktivitas_arus_kas,
+            nama_akun_lawan,
+            SUM(nilai_neto) AS total_nilai_neto
+        FROM public.view_laporan_arus_kas_final
+        WHERE tanggal_transaksi BETWEEN $1 AND $2
+        GROUP BY aktivitas_arus_kas, nama_akun_lawan
+        ORDER BY aktivitas_arus_kas ASC;
+        """,
+        start_date,
+        end_date
+    )
+
+    report = {
+        "1. Aktivitas Operasional (CFO)": {},
+        "2. Aktivitas Investasi (CFI)": {},
+        "3. Aktivitas Pendanaan (CFF)": {},
+        "Total_Bersih": Decimal("0.00")
+    }
+
+    for row in rows:
+        kategori = row['aktivitas_arus_kas']
+        akun = row['nama_akun_lawan']
+        nilai = _money(row['total_nilai_neto'])
+
+        if kategori in report:
+            report[kategori][akun] = nilai
+            report["Total_Bersih"] += nilai
+
+    return report

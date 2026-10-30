@@ -18,6 +18,7 @@ from variants import (
 from finance import (
     account_type_from_category,
     expense_lines,
+    get_laporan_arus_kas,
     post_finance_source,
     purchase_lines,
     transaction_lines,
@@ -1206,6 +1207,18 @@ async def finance_cash_flow(_: User = Depends(ADMIN)):
         """
     )
     return [dict(row) for row in rows]
+
+
+@api.get("/finance/cash-flow-statement")
+async def finance_cash_flow_statement(
+    start: date,
+    end: date,
+    _: User = Depends(ADMIN),
+):
+    if end < start:
+        raise HTTPException(422, "Tanggal selesai tidak boleh sebelum tanggal mulai.")
+    await db.connect()
+    return await get_laporan_arus_kas(db.pool, start, end)
 
 
 @api.get("/finance/balance-sheet")
