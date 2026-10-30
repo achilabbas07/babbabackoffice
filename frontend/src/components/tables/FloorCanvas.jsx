@@ -40,16 +40,30 @@ const Tile = ({ t, editing }) => {
   const Icon = fixture ? Store : Armchair;
   const od = t.orderData;
   const busy = !editing && t.status === "occupied" && od;
+  if (busy) {
+    return (
+      <div className={`flex h-full w-full flex-col px-2 py-2 ${s.text}`}>
+        <p data-testid={`table-tile-customer-${t.id}`} className="truncate text-lg font-bold text-slate-700">
+          {od.customerName?.trim() || "UMUM"}
+        </p>
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
+          <Icon className="h-7 w-7" strokeWidth={2.2} />
+          <p className="mt-1 truncate text-base font-bold">{t.name}</p>
+        </div>
+        <div className="mt-auto flex w-full items-end justify-between gap-1">
+          <p data-testid={`table-tile-time-${t.id}`} className="truncate text-left font-mono text-xs">
+            {fmtTime(od.startTime)}
+          </p>
+          <p className="shrink-0 text-right text-base font-bold">{shortRp(od.total || 0)}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`w-full px-2 ${fixture ? "text-slate-500" : s.text}`}>
-      <Icon className={`mx-auto ${busy ? "h-7 w-7" : "h-10 w-10"}`} strokeWidth={2.2} />
+      <Icon className="mx-auto h-10 w-10" strokeWidth={2.2} />
       <p className="mt-1 truncate text-base font-bold">{t.name}</p>
-      {busy && (
-        <>
-          <p data-testid={`table-tile-customer-${t.id}`} className="truncate text-xs font-medium text-slate-600">{od.customerName || "Umum"}</p>
-          <p data-testid={`table-tile-time-${t.id}`} className="font-mono text-xs">{fmtTime(od.startTime)} · {shortRp(od.total || 0)}</p>
-        </>
-      )}
     </div>
   );
 };
