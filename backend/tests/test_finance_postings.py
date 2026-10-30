@@ -2,7 +2,22 @@ import asyncio
 from datetime import date
 from decimal import Decimal
 
-from finance import expense_lines, post_finance_source, purchase_lines, transaction_lines
+from finance import (
+    account_type_from_category,
+    expense_lines,
+    post_finance_source,
+    purchase_lines,
+    transaction_lines,
+)
+
+
+def test_chart_account_categories_map_to_journal_types():
+    assert account_type_from_category("Aset Lancar") == "asset"
+    assert account_type_from_category("Liabilitas Jangka Pendek") == "liability"
+    assert account_type_from_category("Modal Pemilik") == "equity"
+    assert account_type_from_category("Pendapatan Operasional") == "revenue"
+    assert account_type_from_category("Beban Gaji") == "expense"
+    assert account_type_from_category("Kategori Tidak Dikenal") is None
 
 
 def test_cash_sale_posts_revenue_and_cost_of_goods():

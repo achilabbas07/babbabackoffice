@@ -7,6 +7,24 @@ from uuid import uuid4
 JournalLine = tuple[str, str, Decimal, Decimal]
 
 
+def account_type_from_category(account_category: Optional[str]) -> Optional[str]:
+    if not account_category:
+        return None
+
+    category = account_category.strip().lower()
+    category_prefixes = (
+        (("asset", "assets", "aset", "aktiva"), "asset"),
+        (("liabilit", "kewajiban", "utang", "hutang"), "liability"),
+        (("equity", "ekuitas", "modal"), "equity"),
+        (("revenue", "pendapatan", "income"), "revenue"),
+        (("expense", "beban", "biaya"), "expense"),
+    )
+    for prefixes, account_type in category_prefixes:
+        if category.startswith(prefixes):
+            return account_type
+    return None
+
+
 def _money(value: Any) -> Decimal:
     return Decimal(str(value or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 

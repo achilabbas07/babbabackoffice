@@ -16,6 +16,7 @@ from variants import (
     variant_hpp,
 )
 from finance import (
+    account_type_from_category,
     expense_lines,
     post_finance_source,
     purchase_lines,
@@ -1117,6 +1118,30 @@ def finance_period_bounds(
 @api.post("/finance/journals")
 async def create_finance_journal(body: JournalIn, user: User = Depends(ADMIN)):
     await db.connect()
+    account_names = list({line.accountName.strip() for line in body.lines})
+    accounts = await db.pool.fetch(
+        """
+        select
+          account_name,
+          min(account_category) as account_category
+        from public.chart_of_accounts
+        where account_name = any($1::text[])
+        group by account_name
+        having count(distinct account_category) = 1
+        """,
+        account_names,
+    )
+    account_types = {
+        row["account_name"]: account_type_from_category(row["account_category"])
+        for row in accounts
+    }
+    for line in body.lines:
+        expected_type = account_types.get(line.accountName.strip())
+        if expected_type is None:
+            raise HTTPException(422, f"Akun '{line.accountName}' tidak ditemukan atau kategorinya belum didukung.")
+        if line.accountType != expected_type:
+            raise HTTPException(422, f"Kelompok akun '{line.accountName}' tidak sesuai dengan chart of accounts.")
+
     entry_id = uuid4()
     values = [
         (
@@ -1142,6 +1167,28 @@ async def create_finance_journal(body: JournalIn, user: User = Depends(ADMIN)):
                 values,
             )
     return {"entryId": str(entry_id), "rowsInserted": len(values)}
+
+
+@api.get("/finance/accounts")
+async def finance_accounts(_: User = Depends(ADMIN)):
+    await db.connect()
+    rows = await db.pool.fetch(
+        """
+        select account_name, min(account_category) as account_category
+        from public.chart_of_accounts
+        where nullif(btrim(account_name), '') is not null
+        group by account_name
+        having count(distinct account_category) = 1
+        order by account_name
+        """
+    )
+    return [
+        {
+            **dict(row),
+            "account_type": account_type_from_category(row["account_category"]),
+        }
+        for row in rows
+    ]
 
 
 @api.get("/finance/cash-flow")

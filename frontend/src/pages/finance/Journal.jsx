@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, errMsg, rp, todayStr } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
+import { FinanceError } from "./FinanceShared";
 
 const ACCOUNT_TYPES = [
   ["asset", "Aset"],
@@ -13,7 +14,7 @@ const ACCOUNT_TYPES = [
   ["expense", "Beban"],
 ];
 
-const newLine = (accountName = "", accountType = "asset") => ({
+const newLine = (accountName = "", accountType = "") => ({
   accountName,
   accountType,
   debit: "",
@@ -25,8 +26,26 @@ const amountInCents = (value) => Math.round((Number(value) || 0) * 100);
 export default function Journal() {
   const [date, setDate] = useState(todayStr());
   const [description, setDescription] = useState("");
-  const [lines, setLines] = useState([newLine("Kas"), newLine("Penjualan", "revenue")]);
+  const [lines, setLines] = useState([newLine(), newLine()]);
+  const [accounts, setAccounts] = useState([]);
+  const [accountsLoading, setAccountsLoading] = useState(true);
+  const [accountsError, setAccountsError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const loadAccounts = useCallback(async () => {
+    setAccountsLoading(true);
+    setAccountsError("");
+    try {
+      const { data } = await api.get("/finance/accounts");
+      setAccounts(data);
+    } catch (error) {
+      setAccountsError(errMsg(error));
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadAccounts(); }, [loadAccounts]);
 
   const totalDebit = lines.reduce((total, line) => total + amountInCents(line.debit), 0);
   const totalCredit = lines.reduce((total, line) => total + amountInCents(line.credit), 0);
@@ -34,13 +53,23 @@ export default function Journal() {
   const validLines = lines.length >= 2 && lines.every((line) => {
     const debit = amountInCents(line.debit);
     const credit = amountInCents(line.credit);
-    return line.accountName.trim() && (debit > 0) !== (credit > 0);
+    const account = accounts.find(({ account_name }) => account_name === line.accountName);
+    return account?.account_type === line.accountType && (debit > 0) !== (credit > 0);
   });
   const canSave = balanced && validLines && Boolean(date && description.trim()) && !saving;
 
   const updateLine = (index, key, value) => {
     setLines((current) => current.map((line, lineIndex) => (
       lineIndex === index ? { ...line, [key]: value } : line
+    )));
+  };
+
+  const selectAccount = (index, accountName) => {
+    const account = accounts.find((item) => item.account_name === accountName);
+    setLines((current) => current.map((line, lineIndex) => (
+      lineIndex === index
+        ? { ...line, accountName, accountType: account?.account_type || "" }
+        : line
     )));
   };
 
@@ -94,16 +123,25 @@ export default function Journal() {
               <Plus className="mr-1 h-4 w-4" />Tambah baris
             </Button>
           </div>
+          {accountsError && <div className="p-4 pb-0"><FinanceError message={accountsError} onRetry={loadAccounts} /></div>}
           <div className="space-y-3 p-4">
             {lines.map((line, index) => (
               <div key={index} className="grid gap-3 rounded-xl border border-border p-3 md:grid-cols-[minmax(160px,1.3fr)_minmax(130px,0.8fr)_minmax(130px,0.8fr)_minmax(130px,0.8fr)_40px] md:items-end">
                 <label className="space-y-1 text-xs font-medium text-muted-foreground">
                   Nama akun
-                  <input required maxLength={160} value={line.accountName} onChange={(event) => updateLine(index, "accountName", event.target.value)} placeholder="Contoh: Kas" className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground" />
+                  <select required value={line.accountName} disabled={accountsLoading || accounts.length === 0} onChange={(event) => selectAccount(index, event.target.value)} className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground disabled:opacity-60">
+                    <option value="">{accountsLoading ? "Memuat akun..." : "Pilih akun"}</option>
+                    {accounts.map((account) => (
+                      <option key={`${account.account_name}-${account.account_category}`} value={account.account_name} disabled={!account.account_type}>
+                        {account.account_name}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="space-y-1 text-xs font-medium text-muted-foreground">
                   Kelompok akun
-                  <select value={line.accountType} onChange={(event) => updateLine(index, "accountType", event.target.value)} className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground">
+                  <select required value={line.accountType} disabled className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground disabled:opacity-75">
+                    <option value="">Pilih nama akun terlebih dahulu</option>
                     {ACCOUNT_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
                 </label>
