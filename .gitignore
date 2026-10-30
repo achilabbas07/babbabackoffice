@@ -98,3 +98,4 @@ credentials.json
 *.key
 .credentials
 !frontend/.env.example
+.env*

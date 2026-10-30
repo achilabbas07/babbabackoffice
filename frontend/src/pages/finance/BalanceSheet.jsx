@@ -37,7 +37,7 @@ export default function BalanceSheet() {
 
   return (
     <div>
-      <PageHeader title="Neraca & Persediaan" subtitle="Posisi aset, kewajiban, dan ekuitas berdasarkan saldo akhir setiap akun.">
+      <PageHeader title="Neraca & Persediaan" subtitle="Posisi aset, kewajiban, dan ekuitas dari saldo akun serta laba berjalan.">
         <button type="button" onClick={load} className="h-10 rounded-lg border border-border bg-card px-4 text-sm font-medium hover:border-primary">Perbarui</button>
       </PageHeader>
       {error && <div className="mb-5"><FinanceError message={error} onRetry={load} /></div>}

@@ -59,7 +59,7 @@ export default function ProfitAndLoss() {
   return (
     <div>
       <div className="no-print print:hidden">
-        <PageHeader title="Laporan Laba Rugi" subtitle="Rincian pendapatan dan beban operasional dari jurnal umum.">
+        <PageHeader title="Laporan Laba Rugi" subtitle="Rincian pendapatan dan beban operasional dari jurnal umum dan transaksi POS.">
           <button type="button" disabled={!summary} onClick={exportExcel} className="inline-flex h-10 items-center rounded-lg border border-border bg-card px-4 text-sm font-semibold hover:border-primary disabled:opacity-50">
             <Download className="mr-2 h-4 w-4" />Unduh Excel
           </button>

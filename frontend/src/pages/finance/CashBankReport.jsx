@@ -31,7 +31,7 @@ export default function CashBankReport() {
 
   return (
     <div>
-      <PageHeader title="Buku Kas & Bank" subtitle="Mutasi kas dan bank yang tercatat pada jurnal umum. Data diperbarui otomatis setiap 30 detik.">
+      <PageHeader title="Buku Kas & Bank" subtitle="Mutasi kas dan bank dari jurnal umum, penjualan, pembelian, dan pengeluaran. Data diperbarui otomatis setiap 30 detik.">
         <button type="button" onClick={load} className="h-10 rounded-lg border border-border bg-card px-4 text-sm font-medium hover:border-primary">Perbarui</button>
       </PageHeader>
       {error && <div className="mb-5"><FinanceError message={error} onRetry={load} /></div>}

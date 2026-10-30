@@ -15,14 +15,19 @@ create table if not exists public.general_ledger (
 );
 
 alter table public.general_ledger
-  add column if not exists entry_id uuid;
-
-update public.general_ledger
-set entry_id = gen_random_uuid()
-where entry_id is null;
+  add column if not exists entry_date date not null default current_date,
+  add column if not exists description text not null default 'Jurnal lama',
+  add column if not exists account_name text not null default 'Akun belum diklasifikasikan',
+  add column if not exists account_type text not null default 'asset',
+  add column if not exists debit numeric(16, 2) not null default 0,
+  add column if not exists credit numeric(16, 2) not null default 0,
+  add column if not exists created_by text,
+  add column if not exists created_at timestamptz not null default now();
 
 alter table public.general_ledger
-  alter column entry_id set not null;
+  add column if not exists entry_id uuid;
+alter table public.general_ledger
+  alter column entry_id set default gen_random_uuid();
 
 create index if not exists general_ledger_entry_idx
   on public.general_ledger (entry_id);
@@ -31,7 +36,11 @@ create index if not exists general_ledger_date_type_idx
 
 alter table public.general_ledger enable row level security;
 revoke all on table public.general_ledger from public, anon, authenticated;
-revoke all on sequence public.general_ledger_id_seq from public, anon, authenticated;
+
+drop view if exists public.view_profit_and_loss_summary;
+drop view if exists public.view_profit_and_loss;
+drop view if exists public.view_balance_sheet;
+drop view if exists public.view_arus_kas_bulanan;
 
 create or replace view public.view_arus_kas_bulanan as
 select

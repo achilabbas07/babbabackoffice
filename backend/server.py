@@ -15,6 +15,12 @@ from variants import (
     product_num,
     variant_hpp,
 )
+from finance import (
+    expense_lines,
+    post_finance_source,
+    purchase_lines,
+    transaction_lines,
+)
 
 import logging
 import asyncpg
@@ -896,6 +902,15 @@ async def create_transaction(body: TransactionIn, request: Request, user: User =
         async with db.pool.acquire() as conn:
             async with conn.transaction():
                 await db.transactions.insert_one(trx.to_mongo(), connection=conn)
+                await post_finance_source(
+                    conn,
+                    "transaction",
+                    trx.id,
+                    date.fromisoformat(trx.date[:10]),
+                    f"Penjualan {trx.id}",
+                    user.id,
+                    transaction_lines(trx.total, trx.method, items),
+                )
                 await consume_checkout_stock(conn, items)
     except asyncpg.PostgresError as err:
         message = getattr(err, "message", None) or str(err)
@@ -933,7 +948,19 @@ async def create_purchase(body: PurchaseIn, user: User = Depends(ADMIN)):
     purchase = Purchase(id=await next_id(f"PO-{datetime.now(timezone.utc):%Y%m%d}"),
                         date=to_utc_iso(body.date) if body.date else now_iso(), supplier=body.supplier,
                         items_json=items, total_cost=sum(i["subtotal"] for i in items), userId=user.id, userName=user.name)
-    await db.purchases.insert_one(purchase.to_mongo())
+    await db.connect()
+    async with db.pool.acquire() as conn:
+        async with conn.transaction():
+            await db.purchases.insert_one(purchase.to_mongo(), connection=conn)
+            await post_finance_source(
+                conn,
+                "purchase",
+                purchase.id,
+                date.fromisoformat(purchase.date[:10]),
+                f"Pembelian persediaan {purchase.id}",
+                user.id,
+                purchase_lines(purchase.total_cost),
+            )
     for inv_id in ids:
         await recalc_hpp_for_inventory(inv_id)
     return purchase
@@ -1024,15 +1051,37 @@ async def create_expense(body: ExpenseIn, user: User = Depends(ADMIN)):
         raise HTTPException(400, "Kategori pengeluaran tidak ditemukan")
     exp = Expense(id=await next_id("EXP"), date=to_utc_iso(body.date) if body.date else now_iso(), category=cat["name"],
                   category_id=cat["_id"], description=body.description, amount=body.amount, userId=user.id, userName=user.name)
-    await db.expenses.insert_one(exp.to_mongo())
+    await db.connect()
+    async with db.pool.acquire() as conn:
+        async with conn.transaction():
+            await db.expenses.insert_one(exp.to_mongo(), connection=conn)
+            await post_finance_source(
+                conn,
+                "expense",
+                exp.id,
+                date.fromisoformat(exp.date[:10]),
+                exp.description.strip() or f"Pengeluaran {exp.category}",
+                user.id,
+                expense_lines(exp.category, exp.amount),
+            )
     return exp
 
 
 @api.delete("/expenses/{eid}")
 async def delete_expense(eid: str, _: User = Depends(ADMIN)):
-    res = await db.expenses.delete_one({"_id": eid})
-    if not res.deleted_count:
-        raise HTTPException(404, "Pengeluaran tidak ditemukan")
+    await db.connect()
+    async with db.pool.acquire() as conn:
+        async with conn.transaction():
+            deleted = await conn.fetchval(
+                "delete from public.expenses where id = $1 returning id",
+                eid,
+            )
+            if deleted is None:
+                raise HTTPException(404, "Pengeluaran tidak ditemukan")
+            await conn.execute(
+                "delete from public.general_ledger where source_type = 'expense' and source_id = $1",
+                eid,
+            )
     return {"ok": True}
 
 
@@ -1059,8 +1108,8 @@ async def create_finance_journal(body: JournalIn, user: User = Depends(ADMIN)):
             await connection.executemany(
                 """
                 insert into public.general_ledger
-                  (entry_id, entry_date, description, account_name, account_type, debit, credit, created_by)
-                values ($1, $2, $3, $4, $5, $6, $7, $8)
+                  (entry_id, transaction_date, entry_date, description, account_name, account_type, debit, credit, created_by)
+                values ($1, $2, $2, $3, $4, $5, $6, $7, $8)
                 """,
                 values,
             )

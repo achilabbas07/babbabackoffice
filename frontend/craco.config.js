@@ -1,5 +1,6 @@
 // craco.config.js
 const path = require("path");
+const { GenerateSW } = require("workbox-webpack-plugin");
 require("dotenv").config();
 
 // Check if we're in development/preview mode (not production build)
@@ -126,6 +127,18 @@ let webpackConfig = {
       // Add health check plugin to webpack if enabled
       if (config.enableHealthCheck && healthPluginInstance) {
         webpackConfig.plugins.push(healthPluginInstance);
+      }
+
+      if (process.env.NODE_ENV === "production") {
+        webpackConfig.plugins.push(
+          new GenerateSW({
+            clientsClaim: true,
+            skipWaiting: true,
+            navigateFallback: "index.html",
+            navigateFallbackDenylist: [/^\/_/, /\/[^/?]+\.[^/]+$/],
+            exclude: [/\.map$/, /asset-manifest\.json$/],
+          }),
+        );
       }
 
       // Overlay's HTML injection + compile-error capture; self-gates on mode !== development.
