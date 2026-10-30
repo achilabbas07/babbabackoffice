@@ -89,7 +89,7 @@ async def post_finance_source(
         insert into public.general_ledger
           (entry_id, transaction_date, entry_date, description, account_name, account_type, debit, credit,
            created_by, source_type, source_id)
-        values ($1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         """,
         [
             (

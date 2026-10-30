@@ -1,6 +1,7 @@
 import asyncio
 from datetime import date
 from decimal import Decimal
+import re
 
 from finance import (
     account_type_from_category,
@@ -80,3 +81,9 @@ def test_post_finance_source_sets_required_transaction_date():
 
     assert "transaction_date, entry_date" in connection.sql
     assert connection.rows[0][1:3] == (entry_date, entry_date)
+    target_columns = re.search(r"insert into public\.general_ledger\s*\((.*?)\)\s*values", connection.sql, re.DOTALL)
+    value_expressions = re.search(r"\bvalues\s*\((.*?)\)", connection.sql, re.DOTALL)
+    assert target_columns is not None
+    assert value_expressions is not None
+    assert len(target_columns.group(1).split(",")) == len(value_expressions.group(1).split(","))
+    assert max(map(int, re.findall(r"\$(\d+)", value_expressions.group(1)))) == len(connection.rows[0])
