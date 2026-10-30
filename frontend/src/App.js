@@ -1,8 +1,9 @@
 import "@/App.css";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
-import { NAV } from "@/lib/nav";
+import { FINANCE_NAV, NAV } from "@/lib/nav";
 import Layout from "@/components/Layout";
 import Login from "@/pages/Login";
 import POS from "@/pages/POS";
@@ -22,18 +23,28 @@ import Shifts from "@/pages/Shifts";
 import Targets from "@/pages/Targets";
 import Profile from "@/pages/Profile";
 import { ProfileProvider } from "@/context/ProfileContext";
+import Journal from "@/pages/finance/Journal";
+import CashBankReport from "@/pages/finance/CashBankReport";
+import BalanceSheet from "@/pages/finance/BalanceSheet";
+import ProfitAndLoss from "@/pages/finance/ProfitAndLoss";
+import { toast } from "sonner";
 
 const PAGES = {
   "/pos": POS, "/tables": Tables, "/open-bills": OpenBills, "/transactions": Transactions, "/customers": Customers,
   "/products": Products, "/inventory": Inventory, "/purchases": Purchases, "/expenses": Expenses, "/reports": Reports,
   "/users": Users, "/schema": Schema, "/cash": Cash, "/shifts": Shifts, "/targets": Targets, "/profile": Profile,
+  "/admin/jurnal": Journal, "/admin/laporan-kas": CashBankReport, "/admin/neraca": BalanceSheet, "/admin/laba-rugi": ProfitAndLoss,
 };
 
-const Protected = ({ roles, children }) => {
+const Protected = ({ roles, deniedMessage, children }) => {
   const { user } = useAuth();
+  const denied = Boolean(user && roles && !roles.includes(user.role));
+  useEffect(() => {
+    if (denied && deniedMessage) toast.error(deniedMessage);
+  }, [denied, deniedMessage]);
   if (user === null) return <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">Memuat...</div>;
   if (!user) return <Navigate to="/login" replace />;
-  if (roles && !roles.includes(user.role)) return <Navigate to="/pos" replace />;
+  if (denied) return <Navigate to="/pos" replace />;
   return children;
 };
 
@@ -45,9 +56,10 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route element={<Protected><Layout /></Protected>}>
-            {NAV.map(({ to, roles }) => {
+            {[...NAV, ...FINANCE_NAV].map(({ to, roles }) => {
               const Page = PAGES[to];
-              return <Route key={to} path={to} element={<Protected roles={roles}><Page /></Protected>} />;
+              const isFinanceRoute = FINANCE_NAV.some((item) => item.to === to);
+              return <Route key={to} path={to} element={<Protected roles={roles} deniedMessage={isFinanceRoute ? "Akses Ditolak" : undefined}><Page /></Protected>} />;
             })}
           </Route>
           <Route path="*" element={<Navigate to="/pos" replace />} />

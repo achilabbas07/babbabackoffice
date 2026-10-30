@@ -19,13 +19,14 @@ from variants import (
 import logging
 import asyncpg
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from typing import List, Literal, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from starlette.middleware.cors import CORSMiddleware
 import os
 
@@ -89,6 +90,37 @@ class TableLayoutItem(BaseModel):
 
 class PinIn(BaseModel):
     pin: str = Field(pattern=r"^\d{4,6}$")
+
+
+class JournalLineIn(BaseModel):
+    accountName: str = Field(min_length=1, max_length=160)
+    accountType: Literal["asset", "liability", "equity", "revenue", "expense"]
+    debit: Decimal = Field(default=Decimal("0"), ge=0, max_digits=16, decimal_places=2)
+    credit: Decimal = Field(default=Decimal("0"), ge=0, max_digits=16, decimal_places=2)
+
+    @model_validator(mode="after")
+    def validate_line(self):
+        if not self.accountName.strip():
+            raise ValueError("Nama akun wajib diisi.")
+        if (self.debit > 0) == (self.credit > 0):
+            raise ValueError("Setiap baris jurnal harus memiliki debit atau kredit, bukan keduanya.")
+        return self
+
+
+class JournalIn(BaseModel):
+    date: date
+    description: str = Field(min_length=1, max_length=240)
+    lines: List[JournalLineIn] = Field(min_length=2)
+
+    @model_validator(mode="after")
+    def validate_journal(self):
+        if not self.description.strip():
+            raise ValueError("Keterangan jurnal wajib diisi.")
+        if sum((line.debit for line in self.lines), Decimal("0")) != sum(
+            (line.credit for line in self.lines), Decimal("0")
+        ):
+            raise ValueError("Total debit harus sama dengan total kredit.")
+        return self
 
 
 class MergeIn(BaseModel):
@@ -1002,6 +1034,77 @@ async def delete_expense(eid: str, _: User = Depends(ADMIN)):
     if not res.deleted_count:
         raise HTTPException(404, "Pengeluaran tidak ditemukan")
     return {"ok": True}
+
+
+# ---------- Financial accounting ----------
+@api.post("/finance/journals")
+async def create_finance_journal(body: JournalIn, user: User = Depends(ADMIN)):
+    await db.connect()
+    entry_id = uuid4()
+    values = [
+        (
+            entry_id,
+            body.date,
+            body.description.strip(),
+            line.accountName.strip(),
+            line.accountType,
+            line.debit,
+            line.credit,
+            user.id,
+        )
+        for line in body.lines
+    ]
+    async with db.pool.acquire() as connection:
+        async with connection.transaction():
+            await connection.executemany(
+                """
+                insert into public.general_ledger
+                  (entry_id, entry_date, description, account_name, account_type, debit, credit, created_by)
+                values ($1, $2, $3, $4, $5, $6, $7, $8)
+                """,
+                values,
+            )
+    return {"entryId": str(entry_id), "rowsInserted": len(values)}
+
+
+@api.get("/finance/cash-flow")
+async def finance_cash_flow(_: User = Depends(ADMIN)):
+    await db.connect()
+    rows = await db.pool.fetch(
+        """
+        select id, entry_id, entry_date, month, description, account_name, money_in, money_out
+        from public.view_arus_kas_bulanan
+        order by entry_date desc, entry_id desc
+        """
+    )
+    return [dict(row) for row in rows]
+
+
+@api.get("/finance/balance-sheet")
+async def finance_balance_sheet(_: User = Depends(ADMIN)):
+    await db.connect()
+    rows = await db.pool.fetch(
+        """
+        select account_name, account_type, balance
+        from public.view_balance_sheet
+        order by account_type, account_name
+        """
+    )
+    return [dict(row) for row in rows]
+
+
+@api.get("/finance/profit-loss")
+async def finance_profit_loss(_: User = Depends(ADMIN)):
+    await db.connect()
+    rows = await db.pool.fetch(
+        """
+        select account_name, account_type, balance
+        from public.view_profit_and_loss
+        order by account_type, account_name
+        """
+    )
+    summary = await db.pool.fetchrow("select * from public.view_profit_and_loss_summary")
+    return {"rows": [dict(row) for row in rows], "summary": dict(summary)}
 
 
 # ---------- Reports ----------

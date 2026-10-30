@@ -109,3 +109,11 @@ const supabase = createClient(
 ```
 
 Nama, peran, dan PIN pengguna POS dikelola melalui menu **Pengguna & PIN** oleh admin. Password Supabase Auth dan akun yang dibuat lewat [`admin-scripts/provision_users.js`](../admin-scripts/provision_users.js) tidak digunakan untuk login POS.
+
+## Sistem Akuntansi & Laporan Keuangan
+
+Menu keuangan hanya ditampilkan untuk role POS `admin`. Route dan seluruh endpoint `/api/finance/*` memverifikasi role dari sesi backend POS; akses non-admin ke halaman keuangan dialihkan ke `/pos` dengan pesan **Akses Ditolak**. Login POS saat ini tidak membuat sesi Supabase Auth, sehingga operasi akuntansi menggunakan API backend dan koneksi PostgreSQL server-side (bukan anon key di browser).
+
+Terapkan tabel jurnal dan view laporan di database dengan menjalankan `alembic upgrade head` dari folder `backend`, atau jalankan [`backend/supabase/migrate_finance_module.sql`](../backend/supabase/migrate_finance_module.sql) melalui Supabase SQL Editor. Migrasi menyediakan `public.general_ledger`, `public.view_arus_kas_bulanan`, `public.view_balance_sheet`, `public.view_profit_and_loss`, dan `public.view_profit_and_loss_summary`. Tabel dan view tersebut menolak akses langsung dari role `anon`/`authenticated`; backend POS membaca dan menulisnya setelah validasi role admin.
+
+Jurnal harus berisi sedikitnya dua baris, setiap baris hanya debit atau kredit, dan jumlah debit harus sama dengan jumlah kredit. Laporan kas diperbarui setiap 30 detik; laporan laba rugi dapat diekspor sebagai Excel atau dicetak ke PDF.

@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useProfile } from "@/context/ProfileContext";
 import { toast } from "sonner";
 import { BrandLogo } from "@/components/BrandLogo";
-import { NAV } from "@/lib/nav";
+import { FINANCE_NAV, NAV } from "@/lib/nav";
 import { ROLE_LABEL } from "@/lib/api";
 import { ShiftGate } from "@/components/ShiftGate";
 import { WaiterPrinterButton } from "@/components/WaiterPrinterButton";
@@ -123,6 +123,7 @@ const NavItem = ({ to, label, icon: Icon, prefix }) => (
 export default function Layout() {
   const { user, logout } = useAuth();
   const items = NAV.filter((n) => n.roles.includes(user.role));
+  const financeItems = FINANCE_NAV.filter((n) => n.roles.includes(user.role));
   const handleLogout = async () => {
     try {
       await logout();
@@ -132,14 +133,20 @@ export default function Layout() {
   };
   return (
     <div className="min-h-screen md:flex">
-      <aside className="sticky top-0 hidden h-screen w-[88px] shrink-0 flex-col border-r border-border bg-card md:flex 2xl:w-64">
+      <aside className="sticky top-0 hidden h-screen w-[88px] shrink-0 flex-col border-r border-border bg-card md:flex 2xl:w-64 print:hidden">
         <div className="px-3 py-4 2xl:px-5 2xl:py-5"><Brand rail /></div>
         <nav className="flex-1 space-y-1 overflow-y-auto px-2 pb-6 2xl:px-3">
           {items.map((n) => <NavItem key={n.to} {...n} prefix="nav" />)}
+          {financeItems.length > 0 && (
+            <section aria-label="Laporan Keuangan" className="pt-4">
+              <p className="mb-2 hidden px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground 2xl:block">Laporan Keuangan</p>
+              {financeItems.map((n) => <NavItem key={n.to} {...n} prefix="nav" />)}
+            </section>
+          )}
         </nav>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="glass sticky top-0 z-30 border-b border-border">
+        <header className="glass sticky top-0 z-30 border-b border-border print:hidden">
           <div className="flex h-16 items-center justify-between gap-4 px-4 lg:px-6">
             <div className="md:hidden"><Brand /></div>
             <div className="hidden sm:block"><Clock /></div>
@@ -162,6 +169,12 @@ export default function Layout() {
           </div>
           <nav className="flex gap-1 overflow-x-auto px-3 pb-2 md:hidden">
             {items.map((n) => <NavItem key={n.to} {...n} prefix="mobile-nav" />)}
+            {financeItems.length > 0 && (
+              <>
+                <span className="flex shrink-0 items-center px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Keuangan</span>
+                {financeItems.map((n) => <NavItem key={n.to} {...n} prefix="mobile-nav" />)}
+              </>
+            )}
           </nav>
         </header>
         <main className="min-w-0 flex-1 px-3 py-4 sm:px-5 lg:px-6">

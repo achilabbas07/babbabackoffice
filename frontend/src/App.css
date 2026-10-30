@@ -15,9 +15,17 @@
 
 @media print {
   @page { size: 58mm auto; margin: 0; }
+  @page financeReport { size: A4 portrait; margin: 14mm; }
   body * { visibility: hidden; }
   .print-area, .print-area * { visibility: visible; color: #000 !important; }
   .print-area { position: fixed; left: 0; top: 0; width: 58mm; padding: 2mm; background: #fff; }
+  .finance-print-area, .finance-print-area * { visibility: visible !important; color: #000 !important; }
+  .finance-print-area { page: financeReport; position: absolute; left: 0; top: 0; width: 100%; padding: 0; background: #fff; }
+  .finance-print-area table { width: 100%; border-collapse: collapse; }
+  .finance-print-area th, .finance-print-area td { border-bottom: 1px solid #d1d5db; padding: 5px 8px; }
+  .finance-print-area th { text-align: left; }
+  .finance-print-area .finance-amount { text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .no-print { display: none !important; }
   .thermal-print-area { box-sizing: border-box; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; }
   .thermal-lines { max-width: 32ch; margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; line-height: 1.25; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
   .no-print { display: none !important; }
