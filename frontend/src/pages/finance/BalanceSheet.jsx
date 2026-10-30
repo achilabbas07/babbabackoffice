@@ -2,26 +2,29 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageHeader, StatCard } from "@/components/PageHeader";
 import { api, errMsg, rp } from "@/lib/api";
 import { FinanceError, FinanceTable, LoadingPanel, Money } from "./FinanceShared";
+import FinanceDateFilter from "./FinanceDateFilter";
 
 const isCashAccount = (name) => /(kas|bank|cash)/i.test(name || "");
 const isInventoryAccount = (name) => /(persediaan bahan baku|persediaan|inventory)/i.test(name || "");
 
 export default function BalanceSheet() {
   const [rows, setRows] = useState([]);
+  const [filters, setFilters] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     setError("");
+    setLoading(true);
     try {
-      const { data } = await api.get("/finance/balance-sheet");
+      const { data } = await api.get("/finance/balance-sheet", { params: filters });
       setRows(data);
     } catch (requestError) {
       setError(errMsg(requestError));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filters]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -40,6 +43,7 @@ export default function BalanceSheet() {
       <PageHeader title="Neraca & Persediaan" subtitle="Posisi aset, kewajiban, dan ekuitas dari saldo akun serta laba berjalan.">
         <button type="button" onClick={load} className="h-10 rounded-lg border border-border bg-card px-4 text-sm font-medium hover:border-primary">Perbarui</button>
       </PageHeader>
+      <FinanceDateFilter onApply={setFilters} />
       {error && <div className="mb-5"><FinanceError message={error} onRetry={load} /></div>}
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total aset" value={rp(totals.assets)} />

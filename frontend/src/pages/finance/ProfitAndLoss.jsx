@@ -5,9 +5,11 @@ import { PageHeader, StatCard } from "@/components/PageHeader";
 import { useProfile } from "@/context/ProfileContext";
 import { api, errMsg, rp } from "@/lib/api";
 import { FinanceError, FinanceTable, LoadingPanel, Money } from "./FinanceShared";
+import FinanceDateFilter from "./FinanceDateFilter";
 
 export default function ProfitAndLoss() {
   const { profile, appName } = useProfile();
+  const [filters, setFilters] = useState({});
   const [rows, setRows] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -15,8 +17,9 @@ export default function ProfitAndLoss() {
 
   const load = useCallback(async () => {
     setError("");
+    setLoading(true);
     try {
-      const { data } = await api.get("/finance/profit-loss");
+      const { data } = await api.get("/finance/profit-loss", { params: filters });
       setRows(data.rows);
       setSummary(data.summary);
     } catch (requestError) {
@@ -24,7 +27,7 @@ export default function ProfitAndLoss() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filters]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -67,6 +70,9 @@ export default function ProfitAndLoss() {
             <Printer className="mr-2 h-4 w-4" />Cetak / PDF
           </button>
         </PageHeader>
+      </div>
+      <div className="no-print print:hidden">
+        <FinanceDateFilter onApply={setFilters} />
       </div>
       {error && <div className="no-print print:hidden mb-5"><FinanceError message={error} onRetry={load} /></div>}
       {loading ? <LoadingPanel /> : summary && (

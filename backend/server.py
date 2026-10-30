@@ -1086,6 +1086,34 @@ async def delete_expense(eid: str, _: User = Depends(ADMIN)):
 
 
 # ---------- Financial accounting ----------
+def finance_period_bounds(
+    start: Optional[date],
+    end: Optional[date],
+    month: Optional[int],
+    year: Optional[int],
+):
+    if (start is None) != (end is None):
+        raise HTTPException(422, "Tanggal mulai dan tanggal selesai harus diisi bersama.")
+    if (month is None) != (year is None):
+        raise HTTPException(422, "Bulan dan tahun harus diisi bersama.")
+    if start is not None and month is not None:
+        raise HTTPException(422, "Gunakan rentang tanggal atau periode bulan, bukan keduanya.")
+    if start is not None:
+        if end is None or end < start:
+            raise HTTPException(422, "Tanggal selesai tidak boleh sebelum tanggal mulai.")
+        return start, end + timedelta(days=1)
+    if month is not None:
+        if year is None or not 1 <= month <= 12 or not 1 <= year <= 9999:
+            raise HTTPException(422, "Bulan atau tahun tidak valid.")
+        try:
+            period_start = date(year, month, 1)
+            period_end = date(year + (1 if month == 12 else 0), month % 12 + 1, 1)
+        except ValueError as error:
+            raise HTTPException(422, "Bulan atau tahun tidak valid.") from error
+        return period_start, period_end
+    return None, None
+
+
 @api.post("/finance/journals")
 async def create_finance_journal(body: JournalIn, user: User = Depends(ADMIN)):
     await db.connect()
@@ -1121,38 +1149,112 @@ async def finance_cash_flow(_: User = Depends(ADMIN)):
     await db.connect()
     rows = await db.pool.fetch(
         """
-        select id, entry_id, entry_date, month, description, account_name, money_in, money_out
-        from public.view_arus_kas_bulanan
-        order by entry_date desc, entry_id desc
+        select
+          sumber_dana,
+          sum(coalesce(uang_masuk, 0) - coalesce(uang_keluar, 0)) as saldo_berjalan
+        from public.view_buku_kas
+        where nullif(btrim(sumber_dana), '') is not null
+        group by sumber_dana
+        order by sumber_dana
         """
     )
     return [dict(row) for row in rows]
 
 
 @api.get("/finance/balance-sheet")
-async def finance_balance_sheet(_: User = Depends(ADMIN)):
+async def finance_balance_sheet(
+    start: Optional[date] = None,
+    end: Optional[date] = None,
+    month: Optional[int] = None,
+    year: Optional[int] = None,
+    _: User = Depends(ADMIN),
+):
+    period_start, period_end = finance_period_bounds(start, end, month, year)
     await db.connect()
     rows = await db.pool.fetch(
         """
+        with filtered_ledger as (
+          select account_name, account_type, debit, credit
+          from public.general_ledger
+          where ($1::date is null or transaction_date >= $1)
+            and ($2::date is null or transaction_date < $2)
+        ),
+        account_balances as (
+          select
+            account_name,
+            account_type,
+            sum(case when account_type = 'asset' then debit - credit else credit - debit end) as balance
+          from filtered_ledger
+          where account_type in ('asset', 'liability', 'equity')
+          group by account_name, account_type
+          having sum(case when account_type = 'asset' then debit - credit else credit - debit end) <> 0
+        ),
+        profit_loss as (
+          select coalesce(sum(
+            case when account_type = 'revenue' then credit - debit else debit - credit end
+          ), 0) as net_profit
+          from filtered_ledger
+          where account_type in ('revenue', 'expense')
+        )
         select account_name, account_type, balance
-        from public.view_balance_sheet
+        from account_balances
+        union all
+        select 'Laba tahun berjalan', 'equity', net_profit
+        from profit_loss
+        where net_profit <> 0
         order by account_type, account_name
-        """
+        """,
+        period_start,
+        period_end,
     )
     return [dict(row) for row in rows]
 
 
 @api.get("/finance/profit-loss")
-async def finance_profit_loss(_: User = Depends(ADMIN)):
+async def finance_profit_loss(
+    start: Optional[date] = None,
+    end: Optional[date] = None,
+    month: Optional[int] = None,
+    year: Optional[int] = None,
+    _: User = Depends(ADMIN),
+):
+    period_start, period_end = finance_period_bounds(start, end, month, year)
     await db.connect()
     rows = await db.pool.fetch(
         """
         select account_name, account_type, balance
-        from public.view_profit_and_loss
+        from (
+          select
+            account_name,
+            account_type,
+            sum(case when account_type = 'revenue' then credit - debit else debit - credit end) as balance
+          from public.general_ledger
+          where account_type in ('revenue', 'expense')
+            and ($1::date is null or transaction_date >= $1)
+            and ($2::date is null or transaction_date < $2)
+          group by account_name, account_type
+          having sum(case when account_type = 'revenue' then credit - debit else debit - credit end) <> 0
+        ) as profit_loss
         order by account_type, account_name
-        """
+        """,
+        period_start,
+        period_end,
     )
-    summary = await db.pool.fetchrow("select * from public.view_profit_and_loss_summary")
+    summary = await db.pool.fetchrow(
+        """
+        select
+          coalesce(sum(case when account_type = 'revenue' then credit - debit end), 0) as revenue,
+          coalesce(sum(case when account_type = 'expense' then debit - credit end), 0) as expenses,
+          coalesce(sum(case when account_type = 'revenue' then credit - debit end), 0)
+            - coalesce(sum(case when account_type = 'expense' then debit - credit end), 0) as net_profit
+        from public.general_ledger
+        where account_type in ('revenue', 'expense')
+          and ($1::date is null or transaction_date >= $1)
+          and ($2::date is null or transaction_date < $2)
+        """,
+        period_start,
+        period_end,
+    )
     return {"rows": [dict(row) for row in rows], "summary": dict(summary)}
 
 
