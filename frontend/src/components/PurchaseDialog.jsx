@@ -11,6 +11,7 @@ import { api, errMsg, rp, todayStr, dateToIso } from "@/lib/api";
 export const PurchaseDialog = ({ open, onOpenChange, inventory, onSaved }) => {
   const [supplier, setSupplier] = useState("");
   const [date, setDate] = useState(todayStr());
+  const [fundingAccount, setFundingAccount] = useState("1-10001");
   const [lines, setLines] = useState([]);
   const [saving, setSaving] = useState(false);
 
@@ -18,6 +19,7 @@ export const PurchaseDialog = ({ open, onOpenChange, inventory, onSaved }) => {
     if (open) {
       setSupplier("");
       setDate(todayStr());
+      setFundingAccount("1-10001");
       setLines([{ inventoryId: "", qty: 1, cost_per_unit: 0 }]);
     }
   }, [open]);
@@ -30,6 +32,7 @@ export const PurchaseDialog = ({ open, onOpenChange, inventory, onSaved }) => {
     try {
       await api.post("/purchases", {
         supplier, date: dateToIso(date),
+        sumber_dana_akun: fundingAccount,
         items: lines.filter((l) => l.inventoryId).map((l) => ({ inventoryId: l.inventoryId, qty: Number(l.qty), cost_per_unit: Number(l.cost_per_unit) })),
       });
       toast.success("Pembelian tercatat, stok bertambah");
@@ -49,6 +52,18 @@ export const PurchaseDialog = ({ open, onOpenChange, inventory, onSaved }) => {
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="grid gap-1.5"><Label>Supplier</Label><Input data-testid="purchase-supplier-input" value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="Nama supplier" /></div>
           <div className="grid gap-1.5"><Label>Tanggal</Label><Input data-testid="purchase-date-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="purchase-funding-account">Sumber Dana</Label>
+            <Select value={fundingAccount} onValueChange={setFundingAccount}>
+              <SelectTrigger id="purchase-funding-account" data-testid="purchase-funding-account">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1-10001">Kas Tunai</SelectItem>
+                <SelectItem value="1-10002">Kas Bank / QRIS</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <div className="space-y-2">
           <div className="grid grid-cols-[1fr_90px_120px_32px] gap-2 text-xs text-muted-foreground"><span>Bahan</span><span>Qty</span><span>Harga/satuan</span><span /></div>

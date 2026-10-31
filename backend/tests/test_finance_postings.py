@@ -7,6 +7,8 @@ from finance import (
     account_type_from_category,
     expense_lines,
     get_dashboard_neraca_kas,
+    post_cash_expense_journal,
+    post_purchase_payment_journal,
     post_finance_source,
     purchase_lines,
     transaction_lines,
@@ -57,6 +59,53 @@ def test_purchase_and_expense_post_balanced_lines():
         ("Listrik", "expense", Decimal("350"), Decimal("0")),
         ("Kas", "asset", Decimal("0"), Decimal("350")),
     ]
+
+
+def test_cash_expense_posts_cash_credit_to_jurnal_transaksi():
+    class FakeConnection:
+        sql = ""
+        args = ()
+
+        async def execute(self, sql, *args):
+            self.sql = sql
+            self.args = args
+
+    connection = FakeConnection()
+    asyncio.run(post_cash_expense_journal(connection, 150000, "Tagihan Listrik & Air"))
+
+    assert "insert into public.jurnal_transaksi" in connection.sql
+    assert "(kode_akun, debit, kredit, keterangan)" in connection.sql
+    assert "values ($1, 0, $2, $3)" in connection.sql
+    assert connection.args == (
+        "1-10001",
+        Decimal("150000.00"),
+        "Pembayaran Tunai Kasir: Tagihan Listrik & Air",
+    )
+
+
+def test_purchase_payment_uses_selected_funding_account():
+    class FakeConnection:
+        sql = ""
+        args = ()
+
+        async def execute(self, sql, *args):
+            self.sql = sql
+            self.args = args
+
+    connection = FakeConnection()
+    asyncio.run(post_purchase_payment_journal(
+        connection,
+        150000,
+        "1-10002",
+        "Pembelian persediaan PO-001 - Supplier",
+    ))
+
+    assert "insert into public.jurnal_transaksi" in connection.sql
+    assert connection.args == (
+        "1-10002",
+        Decimal("150000.00"),
+        "Pembelian persediaan PO-001 - Supplier",
+    )
 
 
 def test_post_finance_source_sets_required_transaction_date():

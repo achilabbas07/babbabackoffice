@@ -71,6 +71,41 @@ def expense_lines(category: str, amount: float) -> list[JournalLine]:
     ]
 
 
+async def post_cash_expense_journal(
+    connection: Any,
+    amount: Any,
+    description: str,
+) -> None:
+    await connection.execute(
+        """
+        insert into public.jurnal_transaksi
+          (kode_akun, debit, kredit, keterangan)
+        values ($1, 0, $2, $3)
+        """,
+        "1-10001",
+        _money(amount),
+        f"Pembayaran Tunai Kasir: {description}",
+    )
+
+
+async def post_purchase_payment_journal(
+    connection: Any,
+    amount: Any,
+    account_code: str,
+    description: str,
+) -> None:
+    await connection.execute(
+        """
+        insert into public.jurnal_transaksi
+          (kode_akun, debit, kredit, keterangan)
+        values ($1, 0, $2, $3)
+        """,
+        account_code,
+        _money(amount),
+        description,
+    )
+
+
 async def post_finance_source(
     connection: Any,
     source_type: str,

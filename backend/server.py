@@ -20,6 +20,8 @@ from finance import (
     expense_lines,
     get_dashboard_neraca_kas,
     get_laporan_arus_kas,
+    post_cash_expense_journal,
+    post_purchase_payment_journal,
     post_finance_source,
     purchase_lines,
     transaction_lines,
@@ -205,6 +207,7 @@ class PurchaseIn(BaseModel):
     date: Optional[str] = None
     supplier: str = Field(min_length=1)
     items: List[PurchaseItemIn] = Field(min_length=1)
+    sumber_dana_akun: Literal["1-10001", "1-10002"] = "1-10001"
 
 
 class ExpenseIn(BaseModel):
@@ -964,6 +967,12 @@ async def create_purchase(body: PurchaseIn, user: User = Depends(ADMIN)):
                 user.id,
                 purchase_lines(purchase.total_cost),
             )
+            await post_purchase_payment_journal(
+                conn,
+                purchase.total_cost,
+                body.sumber_dana_akun,
+                f"Pembelian persediaan {purchase.id} - {purchase.supplier}",
+            )
     for inv_id in ids:
         await recalc_hpp_for_inventory(inv_id)
     return purchase
@@ -1067,6 +1076,10 @@ async def create_expense(body: ExpenseIn, user: User = Depends(ADMIN)):
                 user.id,
                 expense_lines(exp.category, exp.amount),
             )
+            expense_description = " - ".join(
+                part for part in (exp.category.strip(), exp.description.strip()) if part
+            )
+            await post_cash_expense_journal(conn, exp.amount, expense_description)
     return exp
 
 

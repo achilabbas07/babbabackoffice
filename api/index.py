@@ -15,6 +15,7 @@ from variants import (
     product_num,
     variant_hpp,
 )
+from finance import post_cash_expense_journal, post_purchase_payment_journal
 
 import logging
 import asyncpg
@@ -155,6 +156,7 @@ class PurchaseIn(BaseModel):
     date: Optional[str] = None
     supplier: str = Field(min_length=1)
     items: List[PurchaseItemIn] = Field(min_length=1)
+    sumber_dana_akun: Literal["1-10001", "1-10002"] = "1-10001"
 
 
 class ExpenseIn(BaseModel):
@@ -822,7 +824,16 @@ async def create_purchase(body: PurchaseIn, user: User = Depends(ADMIN)):
     purchase = Purchase(id=await next_id(f"PO-{datetime.now(timezone.utc):%Y%m%d}"),
                         date=to_utc_iso(body.date) if body.date else now_iso(), supplier=body.supplier,
                         items_json=items, total_cost=sum(i["subtotal"] for i in items), userId=user.id, userName=user.name)
-    await db.purchases.insert_one(purchase.to_mongo())
+    await db.connect()
+    async with db.pool.acquire() as conn:
+        async with conn.transaction():
+            await db.purchases.insert_one(purchase.to_mongo(), connection=conn)
+            await post_purchase_payment_journal(
+                conn,
+                purchase.total_cost,
+                body.sumber_dana_akun,
+                f"Pembelian persediaan {purchase.id} - {purchase.supplier}",
+            )
     for inv_id in ids:
         await recalc_hpp_for_inventory(inv_id)
     return purchase
@@ -913,7 +924,14 @@ async def create_expense(body: ExpenseIn, user: User = Depends(ADMIN)):
         raise HTTPException(400, "Kategori pengeluaran tidak ditemukan")
     exp = Expense(id=await next_id("EXP"), date=to_utc_iso(body.date) if body.date else now_iso(), category=cat["name"],
                   category_id=cat["_id"], description=body.description, amount=body.amount, userId=user.id, userName=user.name)
-    await db.expenses.insert_one(exp.to_mongo())
+    await db.connect()
+    async with db.pool.acquire() as conn:
+        async with conn.transaction():
+            await db.expenses.insert_one(exp.to_mongo(), connection=conn)
+            expense_description = " - ".join(
+                part for part in (exp.category.strip(), exp.description.strip()) if part
+            )
+            await post_cash_expense_journal(conn, exp.amount, expense_description)
     return exp
 
 
