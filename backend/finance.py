@@ -154,46 +154,16 @@ async def get_laporan_arus_kas(
 
 
 async def get_dashboard_neraca_kas(connection: Any) -> dict[str, Any]:
-    cash_rows = await connection.fetch(
+    row = await connection.fetchrow(
         """
         select
-          sumber_dana,
-          sum(coalesce(uang_masuk, 0) - coalesce(uang_keluar, 0)) as saldo_berjalan
-        from public.view_buku_kas
-        where nullif(btrim(sumber_dana), '') is not null
-        group by sumber_dana
-        order by sumber_dana
+          kas_bank_akhir,
+          persediaan_bahan_baku,
+          total_aset,
+          total_liabilitas_ekuitas
+        from public.view_dashboard_neraca_kas
         """
     )
-    balance_rows = await connection.fetch(
-        """
-        with account_balances as (
-          select
-            account_name,
-            account_type,
-            sum(case when account_type = 'asset' then debit - credit else credit - debit end) as balance
-          from public.general_ledger
-          where account_type in ('asset', 'liability', 'equity')
-          group by account_name, account_type
-          having sum(case when account_type = 'asset' then debit - credit else credit - debit end) <> 0
-        ),
-        profit_loss as (
-          select coalesce(sum(
-            case when account_type = 'revenue' then credit - debit else debit - credit end
-          ), 0) as net_profit
-          from public.general_ledger
-          where account_type in ('revenue', 'expense')
-        )
-        select account_name, account_type, balance
-        from account_balances
-        union all
-        select 'Laba tahun berjalan', 'equity', net_profit
-        from profit_loss
-        where net_profit <> 0
-        order by account_type, account_name
-        """
-    )
-    return {
-        "cash_bank": [dict(row) for row in cash_rows],
-        "balance_sheet": [dict(row) for row in balance_rows],
-    }
+    if row is None:
+        raise RuntimeError("View view_dashboard_neraca_kas tidak mengembalikan data.")
+    return dict(row)

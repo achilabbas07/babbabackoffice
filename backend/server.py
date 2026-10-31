@@ -33,7 +33,7 @@ from decimal import Decimal
 from typing import List, Literal, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 from starlette.middleware.cors import CORSMiddleware
@@ -1211,7 +1211,8 @@ async def finance_cash_flow(_: User = Depends(ADMIN)):
 
 
 @app.get("/api/v1/finance/dashboard-summary")
-async def finance_dashboard_summary(_: User = Depends(ADMIN)):
+async def finance_dashboard_summary(response: Response, _: User = Depends(ADMIN)):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
         await db.connect()
         data = await get_dashboard_neraca_kas(db.pool)

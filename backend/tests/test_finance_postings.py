@@ -90,20 +90,27 @@ def test_post_finance_source_sets_required_transaction_date():
     assert max(map(int, re.findall(r"\$(\d+)", value_expressions.group(1)))) == len(connection.rows[0])
 
 
-def test_dashboard_neraca_kas_returns_cash_and_balance_rows():
+def test_dashboard_neraca_kas_reads_summary_view():
     class FakeConnection:
         def __init__(self):
-            self.results = [
-                [{"sumber_dana": "Kas", "saldo_berjalan": Decimal("125.00")}],
-                [{"account_name": "Kas", "account_type": "asset", "balance": Decimal("125.00")}],
-            ]
+            self.sql = ""
 
-        async def fetch(self, _query):
-            return self.results.pop(0)
+        async def fetchrow(self, sql):
+            self.sql = sql
+            return {
+                "kas_bank_akhir": Decimal("968050.00"),
+                "persediaan_bahan_baku": Decimal("1526718.00"),
+                "total_aset": Decimal("2494768.00"),
+                "total_liabilitas_ekuitas": Decimal("2494768.00"),
+            }
 
-    result = asyncio.run(get_dashboard_neraca_kas(FakeConnection()))
+    connection = FakeConnection()
+    result = asyncio.run(get_dashboard_neraca_kas(connection))
 
     assert result == {
-        "cash_bank": [{"sumber_dana": "Kas", "saldo_berjalan": Decimal("125.00")}],
-        "balance_sheet": [{"account_name": "Kas", "account_type": "asset", "balance": Decimal("125.00")}],
+        "kas_bank_akhir": Decimal("968050.00"),
+        "persediaan_bahan_baku": Decimal("1526718.00"),
+        "total_aset": Decimal("2494768.00"),
+        "total_liabilitas_ekuitas": Decimal("2494768.00"),
     }
+    assert "from public.view_dashboard_neraca_kas" in connection.sql
