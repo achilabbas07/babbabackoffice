@@ -1656,7 +1656,7 @@ async def shutdown_db_client():
 
 
 app = CORSMiddleware(
-    app=app,
+    CORSMiddleware,
     allow_credentials=True,
     allow_origins=configured_origins,
     allow_methods=["*"],
