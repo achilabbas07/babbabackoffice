@@ -1011,7 +1011,12 @@ configured_origins = [
     for origin in os.environ.get("CORS_ORIGINS", "").split(",")
     if origin.strip()
 ]
-for origin in ("https://babbapos.vercel.app", "http://localhost:3000", "http://127.0.0.1:3000"):
+for origin in (
+    "https://babbapos.vercel.app",
+    "https://babbabackoffice.vercel.app",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+):
     if origin not in configured_origins:
         configured_origins.append(origin)
 
