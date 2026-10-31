@@ -77,9 +77,9 @@ export default function Reports() {
               <div data-testid="report-top-products" className="divide-y divide-border">
                 {data.top_products.length === 0 && <p className="text-sm text-muted-foreground">Belum ada data.</p>}
                 {data.top_products.map((p, i) => (
-                  <div key={p.productId} className="flex items-center gap-4 py-2.5 text-sm">
+                  <div key={`${p.productId}:${p.variantId ?? p.variantName ?? ""}`} className="flex items-center gap-4 py-2.5 text-sm">
                     <span className="w-6 font-mono text-muted-foreground">{i + 1}</span>
-                    <span className="flex-1">{p.name}</span>
+                    <span className="flex-1">{p.variantName ? `${p.name} - ${p.variantName}` : p.name}</span>
                     <span className="font-mono text-muted-foreground">{p.qty}×</span>
                     <span className="w-28 text-right font-mono">{rp(p.revenue)}</span>
                     <span className="w-28 text-right font-mono text-emerald-600">{rp(p.profit)}</span>

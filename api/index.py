@@ -966,7 +966,13 @@ async def report_summary(start: str, end: str, tz_offset: int = 0, _: User = Dep
         daily[day]["cogs"] += t_cogs
         daily[day]["count"] += 1
         for i in t["items_json"]:
-            p = products.setdefault(i["productId"], {"productId": i["productId"], "name": i["productName"], "qty": 0, "revenue": 0.0, "profit": 0.0})
+            variant_id = i.get("variantId")
+            variant_name = i.get("variantName") or ""
+            product_key = (i["productId"], variant_id if variant_id is not None else variant_name)
+            p = products.setdefault(product_key, {
+                "productId": i["productId"], "variantId": variant_id, "name": i["productName"],
+                "variantName": variant_name, "qty": 0, "revenue": 0.0, "profit": 0.0,
+            })
             p["qty"] += i["qty"]
             p["revenue"] += i["price"] * i["qty"]
             p["profit"] += (i["price"] - i["hpp"]) * i["qty"]
