@@ -1,5 +1,5 @@
 import {
-  ShoppingCart, LayoutGrid, ReceiptText, History, Users, UtensilsCrossed, Boxes, Truck, Wallet, BarChart3, UserCog, Database, Banknote, ClipboardList, Target, Store, BookOpen, Scale,
+  ShoppingCart, LayoutGrid, ReceiptText, History, Users, UtensilsCrossed, Boxes, Truck, Wallet, BarChart3, UserCog, ClipboardList, Target, Store, BookOpen,
 } from "lucide-react";
 
 const ALL = ["admin", "kasir", "waiter"];
@@ -22,13 +22,11 @@ export const NAV = [
   { to: "/shifts", label: "Riwayat Shift", icon: ClipboardList, roles: ADMIN },
   { to: "/users", label: "Pengguna", icon: UserCog, roles: ADMIN },
   { to: "/profile", label: "Profil Usaha", icon: Store, roles: ADMIN },
-  { to: "/schema", label: "Skema Database", icon: Database, roles: ADMIN },
 ];
 
 export const FINANCE_NAV = [
   { to: "/admin/jurnal", label: "Input Jurnal Umum", icon: BookOpen, roles: ADMIN },
-  { to: "/admin/laporan-kas", label: "Buku Kas & Bank", icon: Banknote, roles: ADMIN },
+  { to: "/admin/dashboard-keuangan", label: "Dashboard & Neraca Keuangan", icon: Wallet, roles: ADMIN },
   { to: "/admin/arus-kas", label: "Laporan Arus Kas", icon: BarChart3, roles: ADMIN },
-  { to: "/admin/neraca", label: "Neraca & Persediaan", icon: Scale, roles: ADMIN },
   { to: "/admin/laba-rugi", label: "Laporan Laba Rugi", icon: BarChart3, roles: ADMIN },
 ];

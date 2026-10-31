@@ -18,6 +18,7 @@ from variants import (
 from finance import (
     account_type_from_category,
     expense_lines,
+    get_dashboard_neraca_kas,
     get_laporan_arus_kas,
     post_finance_source,
     purchase_lines,
@@ -1207,6 +1208,17 @@ async def finance_cash_flow(_: User = Depends(ADMIN)):
         """
     )
     return [dict(row) for row in rows]
+
+
+@app.get("/api/v1/finance/dashboard-summary")
+async def finance_dashboard_summary(_: User = Depends(ADMIN)):
+    try:
+        await db.connect()
+        data = await get_dashboard_neraca_kas(db.pool)
+    except Exception as error:
+        logger.exception("Failed to load finance dashboard summary")
+        raise HTTPException(500, "Gagal memuat ringkasan dashboard keuangan.") from error
+    return {"status": "success", "data": data}
 
 
 @api.get("/finance/cash-flow-statement")

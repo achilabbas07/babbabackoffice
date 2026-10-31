@@ -6,6 +6,7 @@ import re
 from finance import (
     account_type_from_category,
     expense_lines,
+    get_dashboard_neraca_kas,
     post_finance_source,
     purchase_lines,
     transaction_lines,
@@ -87,3 +88,22 @@ def test_post_finance_source_sets_required_transaction_date():
     assert value_expressions is not None
     assert len(target_columns.group(1).split(",")) == len(value_expressions.group(1).split(","))
     assert max(map(int, re.findall(r"\$(\d+)", value_expressions.group(1)))) == len(connection.rows[0])
+
+
+def test_dashboard_neraca_kas_returns_cash_and_balance_rows():
+    class FakeConnection:
+        def __init__(self):
+            self.results = [
+                [{"sumber_dana": "Kas", "saldo_berjalan": Decimal("125.00")}],
+                [{"account_name": "Kas", "account_type": "asset", "balance": Decimal("125.00")}],
+            ]
+
+        async def fetch(self, _query):
+            return self.results.pop(0)
+
+    result = asyncio.run(get_dashboard_neraca_kas(FakeConnection()))
+
+    assert result == {
+        "cash_bank": [{"sumber_dana": "Kas", "saldo_berjalan": Decimal("125.00")}],
+        "balance_sheet": [{"account_name": "Kas", "account_type": "asset", "balance": Decimal("125.00")}],
+    }
