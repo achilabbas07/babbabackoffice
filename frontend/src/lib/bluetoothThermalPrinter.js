@@ -60,6 +60,14 @@ export function formatLine(leftText, rightText, width = LINE_WIDTH) {
   return `${left.slice(0, leftWidth).padEnd(leftWidth)}${right.padStart(width - leftWidth)}`;
 }
 
+function formatItemLines(label, amount) {
+  const right = String(amount ?? "");
+  const leftWidth = Math.max(1, LINE_WIDTH - right.length - 1);
+  return wrapText(label, leftWidth).map((text, index) =>
+    index === 0 ? formatLine(text, right) : text.padEnd(LINE_WIDTH),
+  );
+}
+
 function itemName(item) {
   return item.name || item.variantName || item.menuName || item.productName || "Menu";
 }
@@ -111,10 +119,10 @@ function paymentLines(data) {
 
   for (const item of items) {
     const qty = item.qty ?? 1;
-    lines.push({
-      type: "text",
-      text: formatLine(`${qty} ${item.displayName || itemName(item)}`, formatCurrency(itemTotal(item))),
-    });
+    lines.push(...formatItemLines(
+      `${qty} ${item.displayName || itemName(item)}`,
+      formatCurrency(itemTotal(item)),
+    ).map((text) => ({ type: "text", text })));
   }
 
   const itemCount = items.reduce((count, item) => count + Number(item.qty ?? 1), 0);
@@ -128,7 +136,7 @@ function paymentLines(data) {
     { type: "text", text: formatLine(`Subtotal ${itemCount} Produk`, formatCurrency(subtotal)) },
     { type: "text", text: formatLine("Total", formatCurrency(total)), bold: true },
     { type: "text", text: "--------------------------------" },
-    { type: "text", text: formatLine(`Metode ${paymentMethod}`, formatCurrency(cash)) },
+    { type: "text", text: formatLine(`Bayar ${paymentMethod}`, formatCurrency(cash)) },
     { type: "text", text: formatLine("Total Bayar", formatCurrency(paid)) },
     ...(isCash
       ? [{ type: "text", text: formatLine("Kembalian", formatCurrency(data.change ?? 0)) }]
@@ -190,7 +198,10 @@ function billLines(data) {
     { type: "text", text: "--------------------------------" },
   ];
   for (const item of items) {
-    lines.push({ type: "text", text: formatLine(`${item.qty ?? 1} ${item.displayName || itemName(item)}`, formatCurrency(itemTotal(item))) });
+    lines.push(...formatItemLines(
+      `${item.qty ?? 1} ${item.displayName || itemName(item)}`,
+      formatCurrency(itemTotal(item)),
+    ).map((text) => ({ type: "text", text })));
   }
   lines.push(
     { type: "text", text: "--------------------------------" },

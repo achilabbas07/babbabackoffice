@@ -128,7 +128,7 @@ describe("Bluetooth ESC/POS receipts", () => {
     expect(text).toContain("No Nota    : TRX-001");
     expect(text).toContain("Waktu      : 29/10/2026 09:55");
     expect(text).toContain("No Urut    : 9");
-    expect(text.some((line) => line.includes("Metode Cash"))).toBe(true);
+    expect(text.some((line) => line.includes("Bayar Cash"))).toBe(true);
     expect(text.some((line) => line.includes("Terbayar  29/10/2026 10:00"))).toBe(true);
     expect(text.some((line) => line.startsWith("Kembalian") && line.includes("Rp 5.000"))).toBe(true);
     expect(text).toContain("Order      : Siti");
@@ -149,7 +149,7 @@ describe("Bluetooth ESC/POS receipts", () => {
       items: [],
     }).map(({ text }) => text);
 
-    expect(lines.some((line) => line.includes("Metode QRIS"))).toBe(true);
+    expect(lines.some((line) => line.includes("Bayar QRIS"))).toBe(true);
     expect(lines.some((line) => line.includes("Kembalian"))).toBe(false);
   });
 
@@ -159,6 +159,27 @@ describe("Bluetooth ESC/POS receipts", () => {
       "cukup panjang",
     ]);
     expect(formatLine("2 Kopi Susu", "Rp 25.000")).toHaveLength(32);
+  });
+
+  it("wraps long item names without shifting the price column", () => {
+    const lines = buildBluetoothReceiptLines("payment", {
+      paymentMethod: "Cash",
+      items: [{
+        qty: 1,
+        name: "Nasi Goreng Spesial dengan Sambal Matah",
+        price: 35000,
+        subtotal: 35000,
+      }],
+    }).map(({ text }) => text);
+    const itemStart = lines.findIndex((line) => line.startsWith("1 Nasi Goreng"));
+    const itemLines = lines.slice(itemStart, itemStart + 2);
+
+    expect(itemLines).toHaveLength(2);
+    expect(itemLines[0]).toHaveLength(32);
+    expect(itemLines[0].endsWith("Rp 35.000")).toBe(true);
+    expect(itemLines.slice(1).every((line) => line.length <= 32)).toBe(true);
+    expect(itemLines[0]).toContain("Spesial");
+    expect(itemLines[1]).toContain("dengan Sambal Matah");
   });
 
   it("includes alignment, initialization, and auto-cut ESC/POS commands", async () => {

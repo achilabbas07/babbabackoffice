@@ -78,7 +78,7 @@ export function buildPaidReceiptLines({ trx, printCount, dateText, paidAtText, c
   if (trx.promoDiscount > 0) append(lines, `Promo: -${currency(trx.promoDiscount)}`);
   if (trx.pointsDiscount > 0) append(lines, `Poin: -${currency(trx.pointsDiscount)}`);
   append(lines, `Total: ${currency(trx.total)}`);
-  append(lines, `Metode: ${trx.method || "-"}`);
+  append(lines, `Bayar ${trx.method || "-"}`);
   append(lines, `Bayar: ${currency(trx.cashGiven)}`);
   if (trx.method === "Cash" || trx.method === "Tunai") {
     append(lines, `Kembalian: ${currency(trx.change)}`);

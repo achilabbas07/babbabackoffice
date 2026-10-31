@@ -59,7 +59,7 @@ describe("thermal print templates", () => {
       itemName,
     });
 
-    expect(lines.some((line) => line.startsWith("Metode: QRIS"))).toBe(true);
+    expect(lines.some((line) => line.startsWith("Bayar QRIS"))).toBe(true);
     expect(lines.some((line) => line.startsWith("Kembalian:"))).toBe(false);
     expect(lines[lines.length - 1]).toBe("Terima Kasih Atas Kunjungan Anda");
   });
