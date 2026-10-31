@@ -11,7 +11,7 @@ export const NAV = [
   { to: "/tables", label: "Meja", icon: LayoutGrid, roles: ALL },
   { to: "/open-bills", label: "Open Bill", icon: ReceiptText, roles: ALL },
   { to: "/targets", label: "Target Sales", icon: Target, roles: ["admin", "waiter"] },
-  { to: "/cash", label: "Kas & Shift", icon: Banknote, roles: STAFF },
+  { to: "/cash", label: "Kas & Shift", icon: Wallet, roles: STAFF },
   { to: "/transactions", label: "Transaksi", icon: History, roles: ADMIN },
   { to: "/customers", label: "Pelanggan", icon: Users, roles: STAFF },
   { to: "/products", label: "Produk & Resep", icon: UtensilsCrossed, roles: ADMIN },
