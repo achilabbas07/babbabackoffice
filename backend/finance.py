@@ -202,3 +202,15 @@ async def get_dashboard_neraca_kas(connection: Any) -> dict[str, Any]:
     if row is None:
         raise RuntimeError("View view_dashboard_neraca_kas tidak mengembalikan data.")
     return dict(row)
+
+
+async def get_recent_finance_transactions(connection: Any) -> list[dict[str, Any]]:
+    rows = await connection.fetch(
+        """
+        select tanggal, keterangan, kode_akun, debit, kredit
+        from public.jurnal_transaksi
+        order by tanggal desc, id desc
+        limit 5
+        """
+    )
+    return [dict(row) for row in rows]

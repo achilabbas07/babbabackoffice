@@ -7,6 +7,7 @@ from finance import (
     account_type_from_category,
     expense_lines,
     get_dashboard_neraca_kas,
+    get_recent_finance_transactions,
     post_cash_expense_journal,
     post_purchase_payment_journal,
     post_finance_source,
@@ -163,3 +164,24 @@ def test_dashboard_neraca_kas_reads_summary_view():
         "total_liabilitas_ekuitas": Decimal("2494768.00"),
     }
     assert "from public.view_dashboard_neraca_kas" in connection.sql
+
+
+def test_recent_finance_transactions_returns_five_latest_journal_rows():
+    class FakeConnection:
+        sql = ""
+
+        async def fetch(self, sql):
+            self.sql = sql
+            return [
+                {"tanggal": "2026-10-31T12:00:00+00:00", "keterangan": f"Jurnal {index}", "kode_akun": "1-10001", "debit": 0, "kredit": 100}
+                for index in range(5)
+            ]
+
+    connection = FakeConnection()
+    result = asyncio.run(get_recent_finance_transactions(connection))
+
+    assert len(result) == 5
+    assert result[0]["keterangan"] == "Jurnal 0"
+    assert "from public.jurnal_transaksi" in connection.sql
+    assert "order by tanggal desc, id desc" in connection.sql
+    assert "limit 5" in connection.sql

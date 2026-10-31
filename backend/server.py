@@ -20,6 +20,7 @@ from finance import (
     expense_lines,
     get_dashboard_neraca_kas,
     get_laporan_arus_kas,
+    get_recent_finance_transactions,
     post_cash_expense_journal,
     post_purchase_payment_journal,
     post_finance_source,
@@ -1232,6 +1233,17 @@ async def finance_dashboard_summary(response: Response, _: User = Depends(ADMIN)
     except Exception as error:
         logger.exception("Failed to load finance dashboard summary")
         raise HTTPException(500, "Gagal memuat ringkasan dashboard keuangan.") from error
+    return {"status": "success", "data": data}
+
+
+@app.get("/api/v1/finance/recent-transactions")
+async def finance_recent_transactions(_: User = Depends(ADMIN)):
+    try:
+        await db.connect()
+        data = await get_recent_finance_transactions(db.pool)
+    except Exception as error:
+        logger.exception("Failed to load recent finance transactions")
+        raise HTTPException(500, "Gagal memuat transaksi keuangan terbaru.") from error
     return {"status": "success", "data": data}
 
 
