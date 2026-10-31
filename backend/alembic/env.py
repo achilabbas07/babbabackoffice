@@ -14,7 +14,16 @@ from pathlib import Path  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
-config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"].replace("postgresql://", "postgresql+psycopg2://").replace("%", "%%"))
+database_url = os.getenv("DATABASE_URL")
+if not database_url:
+    raise RuntimeError(
+        "DATABASE_URL belum disetel. Tambahkan URL koneksi PostgreSQL ke backend/.env; "
+        "SUPABASE_URL adalah URL API dan tidak dapat digunakan oleh Alembic."
+    )
+config.set_main_option(
+    "sqlalchemy.url",
+    database_url.replace("postgresql://", "postgresql+psycopg2://").replace("%", "%%"),
+)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

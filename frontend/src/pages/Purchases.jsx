@@ -37,10 +37,18 @@ export default function Purchases() {
                 <div>
                   <p className="font-semibold">{p.supplier}</p>
                   <p className="font-mono text-xs text-muted-foreground">{p.id} · {fmtDate(p.date)} · oleh {p.userName}</p>
+                  {p.status_pembayaran === "belum_lunas" && (
+                    <p className="mt-1 text-xs font-medium text-destructive">
+                      Belum lunas · sisa utang {rp(p.sisa_utang)}
+                    </p>
+                  )}
                 </div>
                 <div className="text-right">
                   <p className="font-mono font-semibold">{rp(p.total_cost)}</p>
                   <p className="text-xs text-muted-foreground">{p.items_json.length} bahan</p>
+                  <p className="text-xs text-muted-foreground">
+                    {p.metode_pembayaran === "credit" ? "Kredit" : "Tunai"}
+                  </p>
                 </div>
               </summary>
               <div className="mt-4 space-y-1 border-t border-border pt-3 text-sm">

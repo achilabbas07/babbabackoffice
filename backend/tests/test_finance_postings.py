@@ -9,8 +9,12 @@ from finance import (
     get_dashboard_neraca_kas,
     get_recent_finance_transactions,
     post_cash_expense_journal,
+    post_debt_payment_journal,
+    post_purchase_journal,
     post_purchase_payment_journal,
     post_finance_source,
+    debt_payment_lines,
+    purchase_journal_lines,
     purchase_lines,
     transaction_lines,
 )
@@ -60,6 +64,54 @@ def test_purchase_and_expense_post_balanced_lines():
         ("Listrik", "expense", Decimal("350"), Decimal("0")),
         ("Kas", "asset", Decimal("0"), Decimal("350")),
     ]
+
+
+def test_purchase_journal_uses_inventory_and_cash_or_ap_accounts():
+    assert purchase_journal_lines(1200, "cash", "1-10002") == [
+        ("Persediaan Barang", "asset", Decimal("1200.00"), Decimal("0")),
+        ("Bank", "asset", Decimal("0"), Decimal("1200.00")),
+    ]
+    assert purchase_journal_lines(1200, "credit") == [
+        ("Persediaan Barang", "asset", Decimal("1200.00"), Decimal("0")),
+        ("Utang Usaha", "liability", Decimal("0"), Decimal("1200.00")),
+    ]
+
+
+def test_debt_payment_journal_debits_ap_and_credits_selected_funding_account():
+    assert debt_payment_lines(450, "1-10001") == [
+        ("Utang Usaha", "liability", Decimal("450.00"), Decimal("0")),
+        ("Kas", "asset", Decimal("0"), Decimal("450.00")),
+    ]
+
+
+def test_purchase_and_debt_payment_code_journals_use_required_account_codes():
+    class FakeConnection:
+        rows = []
+
+        async def executemany(self, sql, rows):
+            self.sql = sql
+            self.rows = list(rows)
+
+    purchase_connection = FakeConnection()
+    asyncio.run(post_purchase_journal(
+        purchase_connection, 1200, "cash", "1-10002", "Pembelian PO-002"
+    ))
+    assert purchase_connection.rows == [
+        ("1-10003", Decimal("1200.00"), Decimal("0"), "Pembelian PO-002"),
+        ("1-10002", Decimal("0"), Decimal("1200.00"), "Pembelian PO-002"),
+    ]
+
+    asyncio.run(post_purchase_journal(
+        purchase_connection, 1200, "credit", None, "Pembelian PO-001"
+    ))
+    assert [row[0] for row in purchase_connection.rows] == ["1-10003", "2-20001"]
+    assert "insert into public.jurnal_transaksi" in purchase_connection.sql
+
+    payment_connection = FakeConnection()
+    asyncio.run(post_debt_payment_journal(
+        payment_connection, 450, "1-10002", "Pelunasan PO-001"
+    ))
+    assert [row[0] for row in payment_connection.rows] == ["2-20001", "1-10002"]
 
 
 def test_cash_expense_posts_cash_credit_to_jurnal_transaksi():

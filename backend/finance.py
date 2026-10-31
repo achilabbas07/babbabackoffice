@@ -61,6 +61,99 @@ def purchase_lines(total_cost: float) -> list[JournalLine]:
     ]
 
 
+def purchase_journal_lines(
+    total_cost: Any,
+    payment_method: str,
+    funding_account_code: Optional[str] = None,
+) -> list[JournalLine]:
+    amount = _money(total_cost)
+    if amount <= 0:
+        return []
+    if payment_method == "credit":
+        credit_account, credit_type = "Utang Usaha", "liability"
+    else:
+        credit_account = {
+            "1-10001": "Kas",
+            "1-10002": "Bank",
+        }.get(funding_account_code or "")
+        if credit_account is None:
+            raise ValueError("Sumber dana pembelian tunai tidak valid.")
+        credit_type = "asset"
+    return [
+        ("Persediaan Barang", "asset", amount, Decimal("0")),
+        (credit_account, credit_type, Decimal("0"), amount),
+    ]
+
+
+def debt_payment_lines(amount: Any, funding_account_code: str) -> list[JournalLine]:
+    value = _money(amount)
+    funding_account = {
+        "1-10001": "Kas",
+        "1-10002": "Bank",
+    }.get(funding_account_code)
+    if value <= 0:
+        return []
+    if funding_account is None:
+        raise ValueError("Sumber dana pelunasan tidak valid.")
+    return [
+        ("Utang Usaha", "liability", value, Decimal("0")),
+        (funding_account, "asset", Decimal("0"), value),
+    ]
+
+
+async def post_purchase_journal(
+    connection: Any,
+    amount: Any,
+    payment_method: str,
+    funding_account_code: Optional[str],
+    description: str,
+) -> None:
+    if payment_method == "credit":
+        credit_code = "2-20001"
+    else:
+        if funding_account_code not in {"1-10001", "1-10002"}:
+            raise ValueError("Sumber dana pembelian tunai tidak valid.")
+        credit_code = funding_account_code
+    value = _money(amount)
+    if value <= 0:
+        return
+    await connection.executemany(
+        """
+        insert into public.jurnal_transaksi
+          (kode_akun, debit, kredit, keterangan)
+        values ($1, $2, $3, $4)
+        """,
+        [
+            ("1-10003", value, Decimal("0"), description),
+            (credit_code, Decimal("0"), value, description),
+        ],
+    )
+
+
+async def post_debt_payment_journal(
+    connection: Any,
+    amount: Any,
+    funding_account_code: str,
+    description: str,
+) -> None:
+    if funding_account_code not in {"1-10001", "1-10002"}:
+        raise ValueError("Sumber dana pelunasan tidak valid.")
+    value = _money(amount)
+    if value <= 0:
+        return
+    await connection.executemany(
+        """
+        insert into public.jurnal_transaksi
+          (kode_akun, debit, kredit, keterangan)
+        values ($1, $2, $3, $4)
+        """,
+        [
+            ("2-20001", value, Decimal("0"), description),
+            (funding_account_code, Decimal("0"), value, description),
+        ],
+    )
+
+
 def expense_lines(category: str, amount: float) -> list[JournalLine]:
     value = Decimal(int(round(amount)))
     if value <= 0:

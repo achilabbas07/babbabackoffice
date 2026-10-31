@@ -28,9 +28,10 @@ export const SCHEMA = [
     ["id", "string", "PK"], ["name", "string"], ["wa", "string"], ["email", "string"], ["points", "number"], ["visits", "number"], ["total_spent", "number"],
   ] },
   { key: "purchases", name: "Purchases", desc: "Restock dari supplier", fields: [
-    ["id", "string", "PK"], ["date", "string"], ["supplier", "string"], ["items_json[].inventoryId", "array", "FK", "inventory"],
-    ["total_cost", "number"], ["userId", "string", "FK", "users"],
-  ] },
+    ["id", "string", "PK"], ["date", "string"], ["supplier_id", "number", "FK", "master_suppliers"], ["supplier", "string"],
+    ["metode_pembayaran", "string"], ["status_pembayaran", "string"], ["sisa_utang", "number"],
+    ["items_json[].inventoryId", "array", "FK", "inventory"], ["total_cost", "number"], ["userId", "string", "FK", "users"],
+  ]},
   { key: "expenses", name: "Expenses", desc: "Beban operasional", fields: [
     ["id", "string", "PK"], ["date", "string"], ["category", "string"], ["description", "string"], ["amount", "number"], ["userId", "string", "FK", "users"],
   ] },

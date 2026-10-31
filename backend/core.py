@@ -176,8 +176,12 @@ class Transaction(BaseDocument):
 class Purchase(BaseDocument):
     date: str
     supplier: str
+    supplier_id: Optional[int] = None
     items_json: List[dict]
     total_cost: float
+    metode_pembayaran: str = "cash"
+    status_pembayaran: str = "lunas"
+    sisa_utang: int = 0
     userId: Optional[str] = None
     userName: str = ""
 

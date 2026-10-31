@@ -124,16 +124,27 @@ create table if not exists transactions (
 create index if not exists transactions_date_idx on transactions(date);
 create index if not exists transactions_customer_idx on transactions("customerId");
 
+create table if not exists master_suppliers (
+  id            bigserial primary key,
+  nama_supplier  varchar not null
+);
+
 create table if not exists purchases (
-  id          text primary key,
-  date        timestamptz not null default now(),
-  supplier    text not null,
-  items_json  jsonb not null,                         -- [{inventoryId, name, unit, qty, cost_per_unit, subtotal}]
-  total_cost  bigint not null default 0,
-  "userId"    text references users(id) on delete set null,
-  "userName"  text not null default ''
+  id                  text primary key,
+  date                timestamptz not null default now(),
+  supplier            text not null,
+  supplier_id         bigint references master_suppliers(id),
+  items_json          jsonb not null,                         -- [{inventoryId, name, unit, qty, cost_per_unit, subtotal}]
+  total_cost          bigint not null default 0,
+  metode_pembayaran   text not null default 'cash' check (metode_pembayaran in ('cash', 'credit')),
+  status_pembayaran   text not null default 'lunas' check (status_pembayaran in ('belum_lunas', 'lunas')),
+  sisa_utang          bigint not null default 0 check (sisa_utang >= 0),
+  "userId"            text references users(id) on delete set null,
+  "userName"          text not null default ''
 );
 create index if not exists purchases_date_idx on purchases(date);
+create index if not exists purchases_supplier_id_idx on purchases(supplier_id);
+create index if not exists purchases_unpaid_idx on purchases(date desc) where status_pembayaran = 'belum_lunas';
 
 create table if not exists expenses (
   id           text primary key,
@@ -224,6 +235,7 @@ alter table tables       enable row level security;
 alter table open_bills   enable row level security;
 alter table transactions enable row level security;
 alter table purchases    enable row level security;
+alter table master_suppliers enable row level security;
 alter table expenses     enable row level security;
 
 -- ---------- 8. Tabel tambahan aplikasi (shift, kas, void, target, sistem) ----------
