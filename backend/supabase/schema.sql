@@ -146,6 +146,18 @@ create index if not exists purchases_date_idx on purchases(date);
 create index if not exists purchases_supplier_id_idx on purchases(supplier_id);
 create index if not exists purchases_unpaid_idx on purchases(date desc) where status_pembayaran = 'belum_lunas';
 
+create table if not exists supplier_payments (
+  id                  uuid primary key default gen_random_uuid(),
+  purchase_id         text not null references purchases(id) on delete restrict,
+  sumber_dana_akun    varchar not null check (sumber_dana_akun in ('1-10001', '1-10002')),
+  jumlah_bayar        numeric(16, 2) not null check (jumlah_bayar > 0),
+  created_at          timestamptz not null default now()
+);
+create index if not exists supplier_payments_purchase_idx
+  on supplier_payments (purchase_id, created_at desc);
+alter table supplier_payments enable row level security;
+revoke all on table supplier_payments from public, anon, authenticated;
+
 create table if not exists expenses (
   id           text primary key,
   date         timestamptz not null default now(),

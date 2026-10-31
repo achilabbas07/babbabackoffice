@@ -226,6 +226,12 @@ class DebtPaymentIn(BaseModel):
     sumber_dana_akun: Literal["1-10001", "1-10002"]
 
 
+class SupplierPaymentIn(BaseModel):
+    purchase_id: str = Field(min_length=1)
+    sumber_dana_akun: Literal["1-10001", "1-10002"]
+    jumlah_bayar: float = Field(gt=0)
+
+
 class ExpenseIn(BaseModel):
     date: Optional[str] = None
     category_id: int
@@ -1079,6 +1085,105 @@ async def pay_purchase_debt(body: DebtPaymentIn, user: User = Depends(ADMIN)):
         "purchase_id": body.purchase_id,
         "amount_paid": body.amount,
         "sisa_utang": remaining,
+        "status_pembayaran": status,
+    }
+
+
+@app.post("/api/v1/finance/pay-supplier")
+async def pay_supplier(body: SupplierPaymentIn, user: User = Depends(ADMIN)):
+    amount = Decimal(str(body.jumlah_bayar))
+    if amount != amount.to_integral_value():
+        raise HTTPException(422, "Jumlah pembayaran harus berupa Rupiah bulat.")
+    amount_int = int(amount)
+    await db.connect()
+
+    payment_id = uuid4()
+    paid_at = datetime.now(timezone.utc).date()
+    description = f"Pembayaran utang supplier {body.purchase_id}"
+
+    async with db.pool.acquire() as conn:
+        async with conn.transaction():
+            purchase = await conn.fetchrow(
+                """
+                select id, sisa_utang, status_pembayaran
+                from public.purchases
+                where id = $1
+                for update
+                """,
+                body.purchase_id,
+            )
+            if purchase is None:
+                raise HTTPException(404, "Nota pembelian tidak ditemukan.")
+
+            outstanding = Decimal(str(purchase["sisa_utang"] or 0))
+            if outstanding <= 0 or purchase["status_pembayaran"] == "lunas":
+                raise HTTPException(409, "Nota pembelian sudah lunas.")
+            if amount > outstanding:
+                raise HTTPException(400, "Jumlah pembayaran melebihi sisa utang aktual.")
+
+            await conn.execute(
+                "lock table public.jurnal_transaksi in share row exclusive mode"
+            )
+            cash_balance = await conn.fetchval(
+                """
+                select coalesce(sum(debit), 0) - coalesce(sum(kredit), 0)
+                from public.jurnal_transaksi
+                where kode_akun = $1
+                """,
+                body.sumber_dana_akun,
+            )
+            if Decimal(str(cash_balance or 0)) < amount:
+                raise HTTPException(400, "Saldo sumber dana tidak mencukupi.")
+
+            updated_purchase = await conn.fetchrow(
+                """
+                update public.purchases
+                set
+                  sisa_utang = sisa_utang - $2::numeric,
+                  status_pembayaran = case
+                    when (sisa_utang - $2::numeric) <= 0 then 'lunas'
+                    else 'belum_lunas'
+                  end
+                where id = $1
+                returning sisa_utang, status_pembayaran
+                """,
+                body.purchase_id,
+                amount,
+            )
+            remaining = int(updated_purchase["sisa_utang"])
+            status = updated_purchase["status_pembayaran"]
+            await conn.execute(
+                """
+                insert into public.supplier_payments
+                  (id, purchase_id, sumber_dana_akun, jumlah_bayar)
+                values ($1, $2, $3, $4)
+                """,
+                payment_id,
+                body.purchase_id,
+                body.sumber_dana_akun,
+                amount_int,
+            )
+            await post_finance_source(
+                conn,
+                "purchase_debt_payment",
+                str(payment_id),
+                paid_at,
+                description,
+                user.id,
+                debt_payment_lines(amount, body.sumber_dana_akun),
+            )
+            await post_debt_payment_journal(
+                conn,
+                amount,
+                body.sumber_dana_akun,
+                description,
+            )
+
+    return {
+        "payment_id": str(payment_id),
+        "purchase_id": body.purchase_id,
+        "jumlah_bayar": amount_int,
+        "sisa_utang": int(remaining),
         "status_pembayaran": status,
     }
 

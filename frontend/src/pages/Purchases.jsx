@@ -4,12 +4,14 @@ import { Plus } from "lucide-react";
 import { api, errMsg, fmtDate, num, rp } from "@/lib/api";
 import { PageHeader, Empty } from "@/components/PageHeader";
 import { PurchaseDialog } from "@/components/PurchaseDialog";
+import { SupplierPaymentDialog } from "@/components/SupplierPaymentDialog";
 import { Button } from "@/components/ui/button";
 
 export default function Purchases() {
   const [list, setList] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [open, setOpen] = useState(false);
+  const [paymentPurchase, setPaymentPurchase] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -38,9 +40,24 @@ export default function Purchases() {
                   <p className="font-semibold">{p.supplier}</p>
                   <p className="font-mono text-xs text-muted-foreground">{p.id} · {fmtDate(p.date)} · oleh {p.userName}</p>
                   {p.status_pembayaran === "belum_lunas" && (
-                    <p className="mt-1 text-xs font-medium text-destructive">
-                      Belum lunas · sisa utang {rp(p.sisa_utang)}
-                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <p className="text-xs font-medium text-destructive">
+                        Belum lunas - sisa utang {rp(p.sisa_utang)}
+                      </p>
+                      <Button
+                        data-testid={`pay-supplier-${p.id}`}
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setPaymentPurchase(p);
+                        }}
+                      >
+                        Bayar Utang
+                      </Button>
+                    </div>
                   )}
                 </div>
                 <div className="text-right">
@@ -63,6 +80,14 @@ export default function Purchases() {
         </div>
       )}
       <PurchaseDialog open={open} onOpenChange={setOpen} inventory={inventory} onSaved={load} />
+      <SupplierPaymentDialog
+        open={Boolean(paymentPurchase)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setPaymentPurchase(null);
+        }}
+        purchase={paymentPurchase}
+        onSaved={load}
+      />
     </div>
   );
 }
